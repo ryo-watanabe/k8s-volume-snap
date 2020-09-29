@@ -24,13 +24,14 @@ type VolumeSnapshotSpec struct {
 	ObjectstoreConfig string        `json:"objectstoreConfig"`
 	IncludeNamespaces []string      `json:"includeNamespaces"` // If not set, snapshot all namespaces
 	VolumeClaims      []VolumeClaim `json:"volumeClaims"`
-	ClusterId         string        `json:"clusterId"`
+	ClusterId         string        `json:"clusterId"` // Used for restic backup path, accuired from kube-system namespace UID of each cluster
 }
 
 // VolumeClaim keeps the spec of each volume snapshot
 type VolumeClaim struct {
-	Namespace     string                           `json:"namespace"`
-	ClaimSpec     corev1.PersistentVolumeClaimSpec `json:"claimSpec"`
+	Name          string                           `json:"name"`      // Name of source PVC
+	Namespace     string                           `json:"namespace"` // Namespace of source PVC
+	ClaimSpec     corev1.PersistentVolumeClaimSpec `json:"claimSpec"` // Spec of source PVC
 	SnapshotId    string                           `json:"snapshotId"`
 	SnapshotTime  metav1.Time                      `json:"snapshotStartTime"`
 	SnapshotSize  int64                            `json:"snapshotSize"`
@@ -65,17 +66,17 @@ type RestoreSpec struct {
 	VolumeSnapshotName string   `json:"volumeSnapshotName"`
 	Kubeconfig         string   `json:"kubeconfig"`
 	RestoreNamespaces  []string `json:"restoreNamespaces"` // If not set, restore all namespaces in the snapshot
-	StrictVolumeClass  bool     `json:"strictVolumeClass"`
+	StrictVolumeClass  bool     `json:"strictVolumeClass"` // If false, restore volumes even if original volume class is not available
 }
 
 // RestoreStatus is the status for a Restore resource
 type RestoreStatus struct {
-	Phase                  string          `json:"phase"`
-	Reason                 string          `json:"reason"`
-	RestoreTimestamp       metav1.Time     `json:"restoreTimestamp"`
-	NumVolumeClaims        int32           `json:"numVolumeClaims"`
-	FailedVolumeClaims     []string        `json:"failed"`
-	NumFailedVolumeClaims  int32           `json:"numFailed"`
+	Phase                 string      `json:"phase"`
+	Reason                string      `json:"reason"`
+	RestoreTimestamp      metav1.Time `json:"restoreTimestamp"`
+	NumVolumeClaims       int32       `json:"numVolumeClaims"`
+	FailedVolumeClaims    []string    `json:"failed"`
+	NumFailedVolumeClaims int32       `json:"numFailed"`
 }
 
 // +genclient
@@ -95,6 +96,7 @@ type ObjectstoreConfigSpec struct {
 	Endpoint              string `json:"endpoint"`
 	CloudCredentialSecret string `json:"cloudCredentialSecret"`
 	Bucket                string `json:"bucket"`
+	RoleArn               string `json:"roleArn"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

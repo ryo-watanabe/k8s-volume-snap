@@ -2,9 +2,8 @@ package objectstore
 
 import (
 	"crypto/tls"
-	"fmt"
 	"net/http"
-	"os"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -15,7 +14,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/sts/stsiface"
 
 	"k8s.io/klog"
-	"github.com/ryo-watanabe/k8s-volume-snap/pkg/utils"
 )
 
 // Objectstore interfaces
@@ -34,6 +32,7 @@ type Bucket struct {
 	Name       string
 	AccessKey  string
 	SecretKey  string
+	RoleArn    string
 	Endpoint   string
 	Region     string
 	BucketName string
@@ -58,11 +57,12 @@ func (b *Bucket) GetBucketName() string {
 }
 
 // NewBucket returns new Bucket
-func NewBucket(name, accessKey, secretKey, endpoint, region, bucketName string, insecure bool) *Bucket {
+func NewBucket(name, accessKey, secretKey, roleArn, endpoint, region, bucketName string, insecure bool) *Bucket {
 	return &Bucket{
 		Name:       name,
 		AccessKey:  accessKey,
 		SecretKey:  secretKey,
+		RoleArn:    roleArn,
 		Endpoint:   endpoint,
 		Region:     region,
 		BucketName: bucketName,
@@ -142,6 +142,35 @@ func (b *Bucket) CreateBucket() error {
 	return err
 }
 
+const policyString = `{
+	"Version":"2012-10-17",
+	"Statement":[
+		{
+			"Action":[
+				"s3:GetBucketLocation",
+				"s3:ListBucket"
+			],
+			"Effect":"Allow",
+			"Resource":[
+				"arn:aws:s3:::PATH_FOR_CLUSTER_ID"
+			],
+			"Sid":"AllowStatement1"
+		},
+		{
+			"Action":[
+				"s3:GetObject",
+				"s3:PutObject",
+				"s3:DeleteObject"
+			],
+			"Effect":"Allow",
+			"Resource":[
+				"arn:aws:s3:::PATH_FOR_CLUSTER_ID/*"
+			],
+			"Sid":"AllowStatement2"
+		}
+	]
+}`
+
 // CreateAssumeRole creates temporaly credentials for a path(=clusterId) in the bucket
 func (b *Bucket) CreateAssumeRole(clusterId string, durationSeconds int64) (*sts.Credentials, error) {
 	// set session
@@ -151,148 +180,17 @@ func (b *Bucket) CreateAssumeRole(clusterId string, durationSeconds int64) (*sts
 	}
 	// create assume role
 	svc := b.newSTS(sess)
-	randString := utils.RandString(5)
+	policy := strings.Trim(strings.ReplaceAll(policyString, "PATH_FOR_CLUSTER_ID", clusterId), "\n\t")
+	klog.Infof("Creating AssumeRole policy:%s", policy)
 	input := &sts.AssumeRoleInput{
 		DurationSeconds: &durationSeconds,
-		Policy:          aws.String("{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"Stmt1\",\"Effect\":\"Allow\",\"Action\":\"s3:ListAllMyBuckets\",\"Resource\":\"*\"}]}"),
-		RoleArn:         aws.String("arn:aws:iam::123456789012:role/demo"), // required
-		RoleSessionName: aws.String("AssumeRoleSession"),
+		Policy:          aws.String(policy),
+		RoleArn:         aws.String(b.roleArn),              // required
+		RoleSessionName: aws.String("K8sVolumeSnapSession"), // required
 	}
 	output, err := svc.AssumeRole(input)
 	if err != nil {
 		return nil, err
 	}
 	return output.Credentials, nil
-}
-
-// Upload a file to the bucket
-func (b *Bucket) Upload(file *os.File, filename string) error {
-	// set session
-	sess, err := b.setSession()
-	if err != nil {
-		return err
-	}
-
-	uploader := b.newUploaderfunc(sess)
-	_, err = uploader.Upload(&s3manager.UploadInput{
-		Bucket: aws.String(b.BucketName),
-		Key:    aws.String(filename),
-		Body:   file,
-	})
-	if err != nil {
-		return fmt.Errorf("Error uploading %s to bucket %s : %s", filename, b.BucketName, err.Error())
-	}
-
-	return nil
-}
-
-// Download a file from the bucket
-func (b *Bucket) Download(file *os.File, filename string) error {
-	// set session
-	sess, err := b.setSession()
-	if err != nil {
-		return err
-	}
-
-	downloader := b.newDownloaderfunc(sess)
-	_, err = downloader.Download(file,
-		&s3.GetObjectInput{
-			Bucket: aws.String(b.BucketName),
-			Key:    aws.String(filename),
-		})
-	if err != nil {
-		return fmt.Errorf("Error downloading %s from bucket %s : %s", filename, b.BucketName, err.Error())
-	}
-
-	return nil
-}
-
-// Delete a file in the bucket
-func (b *Bucket) Delete(filename string) error {
-	// set session
-	sess, err := b.setSession()
-	if err != nil {
-		return err
-	}
-
-	svc := b.newS3func(sess)
-	_, err = svc.DeleteObject(&s3.DeleteObjectInput{
-		Bucket: aws.String(b.BucketName),
-		Key:    aws.String(filename),
-	})
-	if err != nil {
-		return fmt.Errorf("Error deleting %s from bucket %s : %s", filename, b.BucketName, err.Error())
-	}
-
-	err = svc.WaitUntilObjectNotExists(&s3.HeadObjectInput{
-		Bucket: aws.String(b.BucketName),
-		Key:    aws.String(filename),
-	})
-	return err
-}
-
-// GetObjectInfo gets info of a file in the bucket
-func (b *Bucket) GetObjectInfo(filename string) (*ObjectInfo, error) {
-	// set session
-	sess, err := b.setSession()
-	if err != nil {
-		return nil, err
-	}
-
-	// list objects
-	svc := b.newS3func(sess)
-	result, err := svc.ListObjects(&s3.ListObjectsInput{
-		Bucket: aws.String(b.BucketName),
-		Prefix: aws.String(filename),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// find in list
-	for _, obj := range result.Contents {
-		if aws.StringValue(obj.Key) == filename {
-			objInfo := ObjectInfo{
-				Name:             filename,
-				Size:             aws.Int64Value(obj.Size),
-				Timestamp:        aws.TimeValue(obj.LastModified),
-				BucketConfigName: b.Name,
-			}
-			return &objInfo, nil
-		}
-	}
-
-	return nil, fmt.Errorf("Object %s not found in bucket %s", filename, b.BucketName)
-}
-
-// ListObjectInfo lists object info
-func (b *Bucket) ListObjectInfo() ([]ObjectInfo, error) {
-	// set session
-	sess, err := b.setSession()
-	if err != nil {
-		return nil, err
-	}
-
-	// list objects
-	svc := b.newS3func(sess)
-	result, err := svc.ListObjects(&s3.ListObjectsInput{
-		Bucket: aws.String(b.BucketName),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// make ObjectInfo list
-	objInfoList := make([]ObjectInfo, 0)
-	for _, obj := range result.Contents {
-		objInfo := ObjectInfo{
-			Name:             aws.StringValue(obj.Key),
-			Size:             aws.Int64Value(obj.Size),
-			Timestamp:        aws.TimeValue(obj.LastModified),
-			BucketConfigName: b.Name,
-		}
-		objInfoList = append(objInfoList, objInfo)
-	}
-
-	return objInfoList, nil
 }

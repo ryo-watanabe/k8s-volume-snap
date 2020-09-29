@@ -23,9 +23,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 
-	cbv1alpha1 "github.com/ryo-watanabe/k8s-snap/pkg/apis/clustersnapshot/v1alpha1"
-	"github.com/ryo-watanabe/k8s-snap/pkg/objectstore"
-	"github.com/ryo-watanabe/k8s-snap/pkg/utils"
+	vsv1alpha1 "github.com/ryo-watanabe/k8s-volume-snap/pkg/apis/volumesnapshot/v1alpha1"
+	"github.com/ryo-watanabe/k8s-volume-snap/pkg/objectstore"
+	"github.com/ryo-watanabe/k8s-volume-snap/pkg/utils"
 )
 
 func matchVerbs(groupVersion string, r *metav1.APIResource) bool {
