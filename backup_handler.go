@@ -13,8 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog"
-	//"github.com/ryo-watanabe/k8s-snap/pkg/cluster"
-	//"github.com/ryo-watanabe/k8s-snap/pkg/objectstore"
 )
 
 // runWorker is a long-running function that will continually call the
@@ -114,7 +112,7 @@ func (c *Controller) snapshotSyncHandler(key string, queueonly bool) error {
 		}
 
 		// bucket
-		bucket, err := c.getBucket(c.namespace, snapshot.Spec.ObjectstoreConfig, c.kubeclientset, c.cbclientset, c.insecure)
+		bucket, err := c.getBucket(c.namespace, snapshot.Spec.ObjectstoreConfig, c.kubeclientset, c.vsclientset, c.insecure)
 		if err != nil {
 			snapshot, err = c.updateSnapshotStatus(snapshot, "Failed", err.Error())
 			if err != nil {
@@ -147,8 +145,6 @@ func (c *Controller) snapshotSyncHandler(key string, queueonly bool) error {
 			return err
 		}
 	}
-
-	nowTime := metav1.NewTime(time.Now())
 
 	// initialize
 	if snapshot.Status.Phase == "" {
@@ -203,7 +199,7 @@ func (c *Controller) enqueueSnapshot(obj interface{}) {
 func (c *Controller) deleteSnapshot(obj interface{}) {
 
 	// convert object into Snapshot and get info for deleting
-	snapshot, ok := obj.(*vsv1alpha1.Snapshot)
+	snapshot, ok := obj.(*vsv1alpha1.VolumeSnapshot)
 	if !ok {
 		klog.Warningf("Delete snapshot: Invalid object passed: %#v", obj)
 		return

@@ -3,9 +3,7 @@ package cluster
 import (
 	"fmt"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -72,35 +70,10 @@ func buildKubeClient(kubeconfig string) (*kubernetes.Clientset, error) {
 }
 
 // Get namespace UID
-func getNamespaceUID(name string, kubeClient *kubernetes.Clientset) (string, error) {
+func getNamespaceUID(name string, kubeClient kubernetes.Interface) (string, error) {
 	ns, err := kubeClient.CoreV1().Namespaces().Get(name, metav1.GetOptions{})
 	if err != nil {
 		return "", fmt.Errorf("Error getting namespace UID : %s", err.Error())
 	}
 	return string(ns.ObjectMeta.GetUID()), nil
 }
-
-/*
-// ConfigMapMarker creates and deletes a config map to get a marker for Resource Version
-func ConfigMapMarker(kubeClient kubernetes.Interface, name string) (*corev1.ConfigMap, error) {
-	configMap := &corev1.ConfigMap{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "ConfigMap",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: "default",
-		},
-	}
-	configMap, err := kubeClient.CoreV1().ConfigMaps("default").Create(configMap)
-	if err != nil {
-		return nil, err
-	}
-	err = kubeClient.CoreV1().ConfigMaps("default").Delete(name, &metav1.DeleteOptions{})
-	if err != nil {
-		return nil, err
-	}
-	return configMap, nil
-}
-*/

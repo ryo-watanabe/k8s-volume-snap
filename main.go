@@ -20,7 +20,6 @@ import (
 	"flag"
 	"time"
 
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog"
@@ -67,11 +66,6 @@ func main() {
 	kubeClient, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
 		klog.Fatalf("Error building kubernetes clientset: %s", err.Error())
-	}
-
-	dynamicClient, err := dynamic.NewForConfig(cfg)
-	if err != nil {
-		klog.Fatalf("Error building dynamic client: %s", err.Error())
 	}
 
 	vsClient, err := clientset.NewForConfig(cfg)

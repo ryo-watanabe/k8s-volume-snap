@@ -7,35 +7,40 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	//corev1 "k8s.io/api/core/v1"
 	"github.com/cenkalti/backoff"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog"
 
 	vsv1alpha1 "github.com/ryo-watanabe/k8s-volume-snap/pkg/apis/volumesnapshot/v1alpha1"
 	"github.com/ryo-watanabe/k8s-volume-snap/pkg/objectstore"
 	"github.com/ryo-watanabe/k8s-volume-snap/pkg/utils"
-	"github.com/ryo-watanabe/k8s-volume-snap/pkg/restic"
 )
 
 // k8s api errors not to retry
 var apiPermErrors = []string{
 	"Unauthorized",
 }
-
 func apiPermError(error string) bool {
 	for _, e := range apiPermErrors {
+		if strings.Contains(error, e) {
+			return true
+		}
+	}
+	return false
+}
+
+// Object store errors not to retry
+var obstPermErrors = []string{
+	"SignatureDoesNotMatch",
+	"InvalidAccessKeyId",
+	"NoSuchBucket",
+}
+func objectstorePermError(error string) bool {
+	for _, e := range obstPermErrors {
 		if strings.Contains(error, e) {
 			return true
 		}
@@ -69,7 +74,6 @@ func snapshotVolumes(
 	// get clusterId (= UID of kube-system namespace)
 	clusterId, err := getNamespaceUID("kube-system", kubeClient)
 	if err != nil {
-
 		// This is the first time that k8s api of target cluster accessed
 		if apiPermError(err.Error()) {
 			return backoff.Permanent(fmt.Errorf("Getting clusterId(=kube-system UID) failed : %s", err.Error()))
@@ -77,33 +81,36 @@ func snapshotVolumes(
 		return fmt.Errorf("Getting clusterId(=kube-system UID) failed : %s", err.Error())
 	}
 	snapshot.Spec.ClusterId = clusterId
-	resticPassword := util.MakePassword(clusterId, 16)
+	resticPassword := utils.MakePassword(clusterId, 16)
 
 	// get 1h valid credentials to access objectstore
 	creds, err := bucket.CreateAssumeRole(clusterId, 3600)
 	if err != nil {
+		// This is the first time that objectstore accessed
+		if objectstorePermError(err.Error()) {
+			return backoff.Permanent(fmt.Errorf("Getting tempraly credentials failed : %s", err.Error()))
+		}
 		return fmt.Errorf("Getting tempraly credentials failed : %s", err.Error())
 	}
 
 	blog.Infof("Backing up volumes from cluster:%s", clusterId)
 
 	// prepare user restic / admin restic
-	// repo := "s3:" + bucket.GetEndpoint() + "/" bucket.GetBucketName() + "/" + clusterId
-	r := restic.NewRestic(bucket.GetEndpoint(), bucket.GetBucketName(), clusterId, resticPassword,
+	r := NewRestic(bucket.GetEndpoint(), bucket.GetBucketName(), clusterId, resticPassword,
 		*creds.AccessKeyId, *creds.SecretAccessKey, *creds.SessionToken,
 		snapshot.GetNamespace(), snapshot.GetName())
-	adminRestic := restic.NewRestic(bucket.GetEndpoint(), bucket.GetBucketName(), clusterId, resticPassword,
-		bucket.AccessKey, bucket.SecretKey, "",
+	adminRestic := NewRestic(bucket.GetEndpoint(), bucket.GetBucketName(), clusterId, resticPassword,
+		bucket.GetAccessKey(), bucket.GetSecretKey(), "",
 		snapshot.GetNamespace(), snapshot.GetName())
 
 	// check repository
 	chkJob := adminRestic.resticJobListSnapshots()
-	_, err = restic.DoResticJob(chkJob, localKubeClient, 5)
+	_, err = DoResticJob(chkJob, localKubeClient, 5)
 	if err != nil {
 		if strings.Contains(err.Error(), "specified key does not exist") {
 			// first snapshot for the cluster, create repository
 			initJob := adminRestic.resticJobInit()
-			_, err = restic.DoResticJob(initJob, localKubeClient, 5)
+			_, err = DoResticJob(initJob, localKubeClient, 5)
 			if err != nil {
 				return fmt.Errorf("Initializing repository failed : %s", err.Error())
 			}
@@ -113,7 +120,7 @@ func snapshotVolumes(
 	}
 
 	// Get PVCs list
-	pvcs, err := kubeClient.CoreV1().PersistentVolumeClaim().List(metav1.ListOptions{})
+	pvcs, err := kubeClient.CoreV1().PersistentVolumeClaims("").List(metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("Error getting PVC list : %s", err.Error())
 	}
@@ -138,7 +145,7 @@ func snapshotVolumes(
 		}
 
 		// get pv
-		pv, err := kubeClient.CoreV1().PersistentVolumeClaim().Get(pvc.Spec.VolumeName, metav1.GetOptions{})
+		pv, err := kubeClient.CoreV1().PersistentVolumes().Get(pvc.Spec.VolumeName, metav1.GetOptions{})
 		if err != nil {
 			blog.Infof("Skipping - Error getting PV : %s", err.Error())
 			continue
@@ -148,8 +155,8 @@ func snapshotVolumes(
 		volumePath := ""
 		nodeName := ""
 		for _, node := range(nodes.Items) {
-			globjob := r.globberJob(pvc.Spec.VolumeName, node.GetName())
-			volumePath, err = restic.DoResticJob(globJob, localKubeClient, 5)
+			globJob := r.globberJob(pvc.Spec.VolumeName, node.GetName())
+			volumePath, err = DoResticJob(globJob, localKubeClient, 5)
 			if err == nil {
 				nodeName = node.GetName()
 				break
@@ -171,7 +178,7 @@ func snapshotVolumes(
 			volumePath = volumePath + "/mount"
 		}
 		snapJob := r.resticJobBackup(pvc.Spec.VolumeName, volumePath, nodeName)
-		output, err = restic.DoResticJob(snapJob, kubeClient, 30)
+		output, err := DoResticJob(snapJob, kubeClient, 30)
 		if err != nil {
 			blog.Warningf("Error taking snapshot PVC %s : %s", pvc.GetName(), err.Error())
 		} else {
@@ -246,15 +253,7 @@ func snapshotVolumes(
 	blog.Infof("Uploading file %s", snapshot.ObjectMeta.Name+".tgz")
 	err = bucket.Upload(snapshotUploadFile, snapshot.ObjectMeta.Name+".tgz")
 	if err != nil {
-		if objectstorePermError(err.Error()) {
-			return backoff.Permanent(fmt.Errorf("Uploading tgz file failed : %s", err.Error()))
-		}
 		return fmt.Errorf("Uploading tgz file failed : %s", err.Error())
-	}
-
-	objInfo, err := bucket.GetObjectInfo(snapshot.ObjectMeta.Name + ".tgz")
-	if err != nil {
-		return fmt.Errorf("Getting objectstore file info failed : %s", err.Error())
 	}
 
 	// Timestamps and size

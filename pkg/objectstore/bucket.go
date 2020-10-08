@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -13,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager/s3manageriface"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/aws/aws-sdk-go/service/sts/stsiface"
 
@@ -36,6 +38,16 @@ type Objectstore interface {
 	GetName() string
 	GetEndpoint() string
 	GetBucketName() string
+	GetAccessKey() string
+	GetSecretKey() string
+}
+
+// ObjectInfo retains snapshot object's info
+type ObjectInfo struct {
+	Name             string
+	Size             int64
+	Timestamp        time.Time
+	BucketConfigName string
 }
 
 // Bucket for connection to a bucket in object store
@@ -67,6 +79,16 @@ func (b *Bucket) GetEndpoint() string {
 // GetBucketName returns bucket's BacketName
 func (b *Bucket) GetBucketName() string {
 	return b.BucketName
+}
+
+// GetAccessKey returns bucket's AccessKey
+func (b *Bucket) GetAccessKey() string {
+	return b.AccessKey
+}
+
+// GetSecretKey returns bucket's SecretKey
+func (b *Bucket) GetSecretKey() string {
+	return b.SecretKey
 }
 
 // NewBucket returns new Bucket
@@ -202,13 +224,13 @@ func (b *Bucket) CreateAssumeRole(clusterId string, durationSeconds int64) (*sts
 		return nil, err
 	}
 	// create assume role
-	svc := b.newSTS(sess)
+	svc := b.newSTSfunc(sess)
 	policy := strings.Trim(strings.ReplaceAll(policyString, "PATH_FOR_CLUSTER_ID", clusterId), "\n\t")
 	klog.Infof("Creating AssumeRole policy:%s", policy)
 	input := &sts.AssumeRoleInput{
 		DurationSeconds: &durationSeconds,
 		Policy:          aws.String(policy),
-		RoleArn:         aws.String(b.roleArn),              // required
+		RoleArn:         aws.String(b.RoleArn),              // required
 		RoleSessionName: aws.String("K8sVolumeSnapSession"), // required
 	}
 	output, err := svc.AssumeRole(input)

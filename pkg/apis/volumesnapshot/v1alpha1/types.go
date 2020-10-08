@@ -61,7 +61,7 @@ type VolumeRestore struct {
 }
 
 // RestoreSpec is the spec for a Restore resource
-type RestoreSpec struct {
+type VolumeRestoreSpec struct {
 	ClusterName        string   `json:"clusterName"`
 	VolumeSnapshotName string   `json:"volumeSnapshotName"`
 	Kubeconfig         string   `json:"kubeconfig"`
@@ -70,7 +70,7 @@ type RestoreSpec struct {
 }
 
 // RestoreStatus is the status for a Restore resource
-type RestoreStatus struct {
+type VolumeRestoreStatus struct {
 	Phase                 string      `json:"phase"`
 	Reason                string      `json:"reason"`
 	RestoreTimestamp      metav1.Time `json:"restoreTimestamp"`

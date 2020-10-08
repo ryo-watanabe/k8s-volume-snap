@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -133,7 +132,8 @@ func (c *Controller) restoreSyncHandler(key string, queueonly bool) error {
 			return nil
 		}
 		bucket := objectstore.NewBucket(osConfig.ObjectMeta.Name, string(cred.Data["accesskey"]),
-			string(cred.Data["secretkey"]), osConfig.Spec.Endpoint, osConfig.Spec.Region, osConfig.Spec.Bucket, c.insecure)
+			string(cred.Data["secretkey"]), string(cred.Data["rolearn"]),
+			osConfig.Spec.Endpoint, osConfig.Spec.Region, osConfig.Spec.Bucket, c.insecure)
 
 		// do restore
 		err = c.clusterCmd.Restore(restore, snapshot, bucket, c.kubeclientset)
@@ -163,7 +163,7 @@ func (c *Controller) restoreSyncHandler(key string, queueonly bool) error {
 	return nil
 }
 
-func (c *Controller) updateRestoreStatus(restore *vsv1alpha1.Restore, phase, reason string) (*vsv1alpha1.Restore, error) {
+func (c *Controller) updateRestoreStatus(restore *vsv1alpha1.VolumeRestore, phase, reason string) (*vsv1alpha1.VolumeRestore, error) {
 	restoreCopy := restore.DeepCopy()
 	restoreCopy.Status.Phase = phase
 	restoreCopy.Status.Reason = reason

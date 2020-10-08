@@ -21,12 +21,10 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	//"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -225,7 +223,7 @@ func (c *Controller) Run(snapshotthreads, restorethreads int, stopCh <-chan stru
 
 func getBucketFunc(namespace, objectstoreConfig string, kubeclient kubernetes.Interface, client clientset.Interface, insecure bool) (objectstore.Objectstore, error) {
 	// bucket
-	osConfig, err := client.ClustersnapshotV1alpha1().ObjectstoreConfigs(namespace).Get(
+	osConfig, err := client.VolumesnapshotV1alpha1().ObjectstoreConfigs(namespace).Get(
 		objectstoreConfig, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
@@ -238,7 +236,8 @@ func getBucketFunc(namespace, objectstoreConfig string, kubeclient kubernetes.In
 		return nil, err
 	}
 	bucket := objectstore.NewBucket(osConfig.ObjectMeta.Name, string(cred.Data["accesskey"]),
-		string(cred.Data["secretkey"]), osConfig.Spec.Endpoint, osConfig.Spec.Region, osConfig.Spec.Bucket, insecure)
+		string(cred.Data["secretkey"]), string(cred.Data["rolearn"]),
+		osConfig.Spec.Endpoint, osConfig.Spec.Region, osConfig.Spec.Bucket, insecure)
 
 	return bucket, nil
 }

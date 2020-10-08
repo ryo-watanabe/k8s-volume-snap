@@ -22,8 +22,8 @@ import (
 	core "k8s.io/client-go/testing"
 	"k8s.io/klog"
 
-	clustersnapshot "github.com/ryo-watanabe/k8s-snap/pkg/apis/clustersnapshot/v1alpha1"
-	"github.com/ryo-watanabe/k8s-snap/pkg/objectstore"
+	//clustersnapshot "github.com/ryo-watanabe/k8s-snap/pkg/apis/clustersnapshot/v1alpha1"
+	//"github.com/ryo-watanabe/k8s-snap/pkg/objectstore"
 )
 
 var kubeobjects []runtime.Object

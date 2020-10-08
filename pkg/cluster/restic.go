@@ -1,4 +1,4 @@
-package restic
+package cluster
 
 import (
 	"bufio"
@@ -9,7 +9,7 @@ import (
 
 	"github.com/cenkalti/backoff"
 	"github.com/golang/glog"
-	"github.com/golang/protobuf/ptypes"
+	//"github.com/golang/protobuf/ptypes"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -98,7 +98,7 @@ func DoResticJob(job *batchv1.Job, kubeClient kubernetes.Interface, initInterval
 
 	// Create job
 	var dp metav1.DeletionPropagation = metav1.DeletePropagationForeground
-	_, err = kubeClient.BatchV1().Jobs(namespace).Create(job)
+	_, err := kubeClient.BatchV1().Jobs(namespace).Create(job)
 	if err != nil {
 		if !errors.IsAlreadyExists(err) {
 			return "", fmt.Errorf("Creating restic job error - %s", err.Error())
@@ -234,7 +234,7 @@ func (r *Restic) resticJobDelete(snapshotId string) *batchv1.Job {
 
 // restic init
 func (r *Restic) resticJobInit() *batchv1.Job {
-	job := r.resticJob("restic-job-init-repo-" + r.clusterId, r.namespace)
+	job := r.resticJob("restic-job-init-repo-" + r.clusterid, r.namespace)
 	job.Spec.Template.Spec.Containers[0].Args = append(
 		job.Spec.Template.Spec.Containers[0].Args,
 		[]string{"init"}...,
@@ -243,7 +243,7 @@ func (r *Restic) resticJobInit() *batchv1.Job {
 }
 
 // restic restore
-func (r *Restic) resticJobRestore(snapId, volumeId, pvcName, pvcNamespace string) (*batchv1.Job, *corev1.Secret) {
+func (r *Restic) resticJobRestore(snapId, volumeId, pvcName, pvcNamespace string) *batchv1.Job {
 	// Job
 	job := r.resticJob("restic-job-restore-"+snapId, pvcNamespace)
 	job.Spec.Template.Spec.Containers[0].Args = append(
@@ -318,7 +318,7 @@ func (r *Restic) resticJob(name, namespace string) *batchv1.Job {
 
 	// Add session token env
 	if r.sessiontoken != "" {
-		job.Spec.Template.Spec.Containers[0].Env = Append(
+		job.Spec.Template.Spec.Containers[0].Env = append(
 			job.Spec.Template.Spec.Containers[0].Env,
 			corev1.EnvVar{
 				Name:  "AWS_SESSION_TOKEN",
@@ -344,7 +344,7 @@ func (r *Restic) globberJob(volumeId, nodeName string) *batchv1.Job {
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  name,
+							Name:  "globber",
 							Image: "alpine",
 							Command: []string{
 								"ls",
