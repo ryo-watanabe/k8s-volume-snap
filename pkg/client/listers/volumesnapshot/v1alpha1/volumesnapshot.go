@@ -26,10 +26,8 @@ import (
 )
 
 // VolumeSnapshotLister helps list VolumeSnapshots.
-// All objects returned here must be treated as read-only.
 type VolumeSnapshotLister interface {
 	// List lists all VolumeSnapshots in the indexer.
-	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.VolumeSnapshot, err error)
 	// VolumeSnapshots returns an object that can list and get VolumeSnapshots.
 	VolumeSnapshots(namespace string) VolumeSnapshotNamespaceLister
@@ -60,13 +58,10 @@ func (s *volumeSnapshotLister) VolumeSnapshots(namespace string) VolumeSnapshotN
 }
 
 // VolumeSnapshotNamespaceLister helps list and get VolumeSnapshots.
-// All objects returned here must be treated as read-only.
 type VolumeSnapshotNamespaceLister interface {
 	// List lists all VolumeSnapshots in the indexer for a given namespace.
-	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.VolumeSnapshot, err error)
 	// Get retrieves the VolumeSnapshot from the indexer for a given namespace and name.
-	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.VolumeSnapshot, error)
 	VolumeSnapshotNamespaceListerExpansion
 }
