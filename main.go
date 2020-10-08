@@ -28,10 +28,10 @@ import (
 	// Uncomment the following line to load the gcp plugin (only required to authenticate against GKE clusters).
 	// _ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 
-	clientset "github.com/ryo-watanabe/k8s-snap/pkg/client/clientset/versioned"
-	informers "github.com/ryo-watanabe/k8s-snap/pkg/client/informers/externalversions"
-	"github.com/ryo-watanabe/k8s-snap/pkg/cluster"
-	"github.com/ryo-watanabe/k8s-snap/pkg/signals"
+	clientset "github.com/ryo-watanabe/k8s-volume-snap/pkg/client/clientset/versioned"
+	informers "github.com/ryo-watanabe/k8s-volume-snap/pkg/client/informers/externalversions"
+	"github.com/ryo-watanabe/k8s-volume-snap/pkg/cluster"
+	"github.com/ryo-watanabe/k8s-volume-snap/pkg/signals"
 )
 
 var (
@@ -40,9 +40,6 @@ var (
 	namespace          string
 	snapshotthreads    int
 	restorethreads     int
-	housekeepstore     bool
-	restoresnapshots   bool
-	validatefileinfo   bool
 	insecure           bool
 	createbucket       bool
 	maxretryelapsedsec int
@@ -51,22 +48,6 @@ var (
 )
 
 func main() {
-
-	////// For client-go <= 8.0.0 must sync flags glog and klog.
-	//flag.Set("logtostderr", "true")
-	//klogFlags := flag.NewFlagSet("klog", flag.ExitOnError)
-	//klog.InitFlags(klogFlags)
-	// Sync the glog and klog flags.
-	//flag.CommandLine.VisitAll(func(f1 *flag.Flag) {
-	//	f2 := klogFlags.Lookup(f1.Name)
-	//	if f2 != nil {
-	//		value := f1.Value.String()
-	//		f2.Value.Set(value)
-	//	}
-	//})
-	//flag.Parse()
-	//klog.Info("Set logs output to stderr.")
-	//klog.Flush()
 
 	////// For client-go > 8.0 ??
 	klog.InitFlags(nil)
@@ -93,25 +74,25 @@ func main() {
 		klog.Fatalf("Error building dynamic client: %s", err.Error())
 	}
 
-	cbClient, err := clientset.NewForConfig(cfg)
+	vsClient, err := clientset.NewForConfig(cfg)
 	if err != nil {
-		klog.Fatalf("Error building customercluster clientset: %s", err.Error())
+		klog.Fatalf("Error building volumesnapshot clientset: %s", err.Error())
 	}
 
-	cbInformerFactory := informers.NewSharedInformerFactory(cbClient, time.Second*30)
+	vsInformerFactory := informers.NewSharedInformerFactory(vsClient, time.Second*30)
 
-	controller := NewController(kubeClient, dynamicClient, cbClient,
-		cbInformerFactory.Clustersnapshot().V1alpha1().Snapshots(),
-		cbInformerFactory.Clustersnapshot().V1alpha1().Restores(),
+	controller := NewController(kubeClient, vsClient,
+		vsInformerFactory.Volumesnapshot().V1alpha1().VolumeSnapshots(),
+		vsInformerFactory.Volumesnapshot().V1alpha1().VolumeRestores(),
 		namespace,
-		housekeepstore, restoresnapshots, validatefileinfo, insecure, createbucket,
+		insecure, createbucket,
 		maxretryelapsedsec,
 		cluster.NewClusterCmd(),
 	)
 
 	// notice that there is no need to run Start methods in a separate goroutine. (i.e. go kubeInformerFactory.Start(stopCh)
 	// Start method is non-blocking and runs all registered informers in a dedicated goroutine.
-	cbInformerFactory.Start(stopCh)
+	vsInformerFactory.Start(stopCh)
 
 	if err = controller.Run(snapshotthreads, restorethreads, stopCh); err != nil {
 		klog.Fatalf("Error running controller: %s", err.Error())
@@ -124,9 +105,6 @@ func init() {
 	flag.StringVar(&namespace, "namespace", "k8s-snap", "Namespace for k8s-snap")
 	flag.IntVar(&snapshotthreads, "snapshotthreads", 5, "Number of snapshot threads")
 	flag.IntVar(&restorethreads, "restorethreads", 2, "Number of restore threads")
-	flag.BoolVar(&housekeepstore, "housekeepstore", true, "Clean up orphan files on object store regularly")
-	flag.BoolVar(&restoresnapshots, "restoresnapshots", true, "Restore snapshot from object store on start")
-	flag.BoolVar(&validatefileinfo, "validatefileinfo", true, "Validate size and timestamp of files on object store")
 	flag.BoolVar(&insecure, "insecure", false, "Skip ssl certificate verification on connecting object store")
 	flag.BoolVar(&createbucket, "createbucket", false, "Create bucket if not exists")
 	flag.IntVar(&maxretryelapsedsec, "maxretryelapsedsec", 300, "Max elaspsed seconds to retry snapshot")

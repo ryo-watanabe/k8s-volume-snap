@@ -2,7 +2,9 @@ package objectstore
 
 import (
 	"crypto/tls"
+	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -10,17 +12,26 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/aws/aws-sdk-go/service/sts/stsiface"
 
 	"k8s.io/klog"
 )
 
+const crPath = "crs/"
+
 // Objectstore interfaces
 type Objectstore interface {
 	ChkBucket() (bool, error)
 	CreateBucket() error
 	CreateAssumeRole(clusterId string, durationSeconds int64) (*sts.Credentials, error)
+
+	Upload(file *os.File, filename string) error
+	Download(file *os.File, filename string) error
+	Delete(filename string) error
+	GetObjectInfo(filename string) (*ObjectInfo, error)
+	ListObjectInfo() ([]ObjectInfo, error)
 
 	GetName() string
 	GetEndpoint() string
@@ -29,16 +40,18 @@ type Objectstore interface {
 
 // Bucket for connection to a bucket in object store
 type Bucket struct {
-	Name       string
-	AccessKey  string
-	SecretKey  string
-	RoleArn    string
-	Endpoint   string
-	Region     string
-	BucketName string
-	insecure   bool
-	newS3func  func(*session.Session) s3iface.S3API
-	newSTSfunc func(*session.Session) stsiface.STSAPI
+	Name              string
+	AccessKey         string
+	SecretKey         string
+	RoleArn           string
+	Endpoint          string
+	Region            string
+	BucketName        string
+	insecure          bool
+	newS3func         func(*session.Session) s3iface.S3API
+	newSTSfunc        func(*session.Session) stsiface.STSAPI
+	newUploaderfunc   func(*session.Session) s3manageriface.UploaderAPI
+	newDownloaderfunc func(*session.Session) s3manageriface.DownloaderAPI
 }
 
 // GetName returns bucket's Name
@@ -59,16 +72,18 @@ func (b *Bucket) GetBucketName() string {
 // NewBucket returns new Bucket
 func NewBucket(name, accessKey, secretKey, roleArn, endpoint, region, bucketName string, insecure bool) *Bucket {
 	return &Bucket{
-		Name:       name,
-		AccessKey:  accessKey,
-		SecretKey:  secretKey,
-		RoleArn:    roleArn,
-		Endpoint:   endpoint,
-		Region:     region,
-		BucketName: bucketName,
-		insecure:   insecure,
-		newS3func:  newS3,
-		newSTSfunc: newSTS,
+		Name:              name,
+		AccessKey:         accessKey,
+		SecretKey:         secretKey,
+		RoleArn:           roleArn,
+		Endpoint:          endpoint,
+		Region:            region,
+		BucketName:        bucketName,
+		insecure:          insecure,
+		newS3func:         newS3,
+		newSTSfunc:        newSTS,
+		newUploaderfunc:   newUploader,
+		newDownloaderfunc: newDownloader,
 	}
 }
 
@@ -78,6 +93,14 @@ func newS3(sess *session.Session) s3iface.S3API {
 
 func newSTS(sess *session.Session) stsiface.STSAPI {
 	return sts.New(sess)
+}
+
+func newUploader(sess *session.Session) s3manageriface.UploaderAPI {
+	return s3manager.NewUploader(sess)
+}
+
+func newDownloader(sess *session.Session) s3manageriface.DownloaderAPI {
+	return s3manager.NewDownloader(sess)
 }
 
 func (b *Bucket) setSession() (*session.Session, error) {
@@ -193,4 +216,137 @@ func (b *Bucket) CreateAssumeRole(clusterId string, durationSeconds int64) (*sts
 		return nil, err
 	}
 	return output.Credentials, nil
+}
+
+// Upload a file to crPath of the bucket
+func (b *Bucket) Upload(file *os.File, filename string) error {
+	// set session
+	sess, err := b.setSession()
+	if err != nil {
+		return err
+	}
+
+	uploader := b.newUploaderfunc(sess)
+	_, err = uploader.Upload(&s3manager.UploadInput{
+		Bucket: aws.String(b.BucketName),
+		Key:    aws.String(crPath + filename),
+		Body:   file,
+	})
+	if err != nil {
+		return fmt.Errorf("Error uploading %s to bucket %s : %s", filename, b.BucketName, err.Error())
+	}
+
+	return nil
+}
+
+// Download a file from crPath of the bucket
+func (b *Bucket) Download(file *os.File, filename string) error {
+	// set session
+	sess, err := b.setSession()
+	if err != nil {
+		return err
+	}
+
+	downloader := b.newDownloaderfunc(sess)
+	_, err = downloader.Download(file,
+		&s3.GetObjectInput{
+			Bucket: aws.String(b.BucketName),
+			Key:    aws.String(crPath + filename),
+		})
+	if err != nil {
+		return fmt.Errorf("Error downloading %s from bucket %s : %s", filename, b.BucketName, err.Error())
+	}
+
+	return nil
+}
+
+// Delete a file in crPath of the bucket
+func (b *Bucket) Delete(filename string) error {
+	// set session
+	sess, err := b.setSession()
+	if err != nil {
+		return err
+	}
+
+	svc := b.newS3func(sess)
+	_, err = svc.DeleteObject(&s3.DeleteObjectInput{
+		Bucket: aws.String(b.BucketName),
+		Key:    aws.String(crPath + filename),
+	})
+	if err != nil {
+		return fmt.Errorf("Error deleting %s from bucket %s : %s", filename, b.BucketName, err.Error())
+	}
+
+	err = svc.WaitUntilObjectNotExists(&s3.HeadObjectInput{
+		Bucket: aws.String(b.BucketName),
+		Key:    aws.String(crPath + filename),
+	})
+	return err
+}
+
+// GetObjectInfo gets info of a file in the bucket
+func (b *Bucket) GetObjectInfo(filename string) (*ObjectInfo, error) {
+	// set session
+	sess, err := b.setSession()
+	if err != nil {
+		return nil, err
+	}
+
+	// list objects
+	svc := b.newS3func(sess)
+	result, err := svc.ListObjects(&s3.ListObjectsInput{
+		Bucket: aws.String(b.BucketName),
+		Prefix: aws.String(crPath + filename),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// find in list
+	for _, obj := range result.Contents {
+		if aws.StringValue(obj.Key) == filename {
+			objInfo := ObjectInfo{
+				Name:             filename,
+				Size:             aws.Int64Value(obj.Size),
+				Timestamp:        aws.TimeValue(obj.LastModified),
+				BucketConfigName: b.Name,
+			}
+			return &objInfo, nil
+		}
+	}
+
+	return nil, fmt.Errorf("Object %s not found in bucket %s", filename, b.BucketName)
+}
+
+// ListObjectInfo lists object info in crPath
+func (b *Bucket) ListObjectInfo() ([]ObjectInfo, error) {
+	// set session
+	sess, err := b.setSession()
+	if err != nil {
+		return nil, err
+	}
+
+	// list objects
+	svc := b.newS3func(sess)
+	result, err := svc.ListObjects(&s3.ListObjectsInput{
+		Bucket: aws.String(b.BucketName),
+		Prefix: aws.String(crPath),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// make ObjectInfo list
+	objInfoList := make([]ObjectInfo, 0)
+	for _, obj := range result.Contents {
+		objInfo := ObjectInfo{
+			Name:             strings.TrimPrefix(aws.StringValue(obj.Key), crPath),
+			Size:             aws.Int64Value(obj.Size),
+			Timestamp:        aws.TimeValue(obj.LastModified),
+			BucketConfigName: b.Name,
+		}
+		objInfoList = append(objInfoList, objInfo)
+	}
+
+	return objInfoList, nil
 }

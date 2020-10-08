@@ -19,6 +19,26 @@ func RandString(n int) string {
 	return string(b)
 }
 
+// MakePassword generates length n password from str
+func MakePassword(str string, n int) string {
+
+	// md5 of the string
+	sum := md5.Sum([]byte(str))
+	hexstr := hex.EncodeToString(sum[:])
+
+	// get random seed with big
+	bi := big.NewInt(0)
+	bi.SetString(hexstr, 16)
+
+	// generate password
+	rand.Seed(bi.Int64())
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
+}
+
 // NamedLog inserts log name in klog
 type NamedLog struct {
 	Name string

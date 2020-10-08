@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
-	cbv1alpha1 "github.com/ryo-watanabe/k8s-snap/pkg/apis/clustersnapshot/v1alpha1"
+	vsv1alpha1 "github.com/ryo-watanabe/k8s-volume-snap/pkg/apis/volumesnapshot/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -82,7 +82,7 @@ func (c *Controller) snapshotSyncHandler(key string, queueonly bool) error {
 	}
 
 	// Get the Snapshot resource with this namespace/name.
-	snapshot, err := c.snapshotLister.Snapshots(namespace).Get(name)
+	snapshot, err := c.snapshotLister.VolumeSnapshots(namespace).Get(name)
 
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -131,23 +131,9 @@ func (c *Controller) snapshotSyncHandler(key string, queueonly bool) error {
 		b.Multiplier = 2.0
 		b.InitialInterval = 2 * time.Second
 		operationSnapshot := func() error {
-			return c.clusterCmd.Snapshot(snapshot)
+			return c.clusterCmd.Snapshot(snapshot, bucket, c.kubeclientset)
 		}
 		err = backoff.RetryNotify(operationSnapshot, b, retryNotify)
-		if err != nil {
-			snapshot, err = c.updateSnapshotStatus(snapshot, "Failed", err.Error())
-			if err != nil {
-				return err
-			}
-			return nil
-		}
-
-		// upload snapshot with backoff retry
-		b.Reset()
-		operationUpload := func() error {
-			return c.clusterCmd.UploadSnapshot(snapshot, bucket)
-		}
-		err = backoff.RetryNotify(operationUpload, b, retryNotify)
 		if err != nil {
 			snapshot, err = c.updateSnapshotStatus(snapshot, "Failed", err.Error())
 			if err != nil {
@@ -166,76 +152,22 @@ func (c *Controller) snapshotSyncHandler(key string, queueonly bool) error {
 
 	// initialize
 	if snapshot.Status.Phase == "" {
-		// Check AvailableUntil
-		if snapshot.Spec.AvailableUntil.IsZero() {
-			// Check TTL string
-			if snapshot.Spec.TTL.Duration == 0 {
-				snapshot.Spec.TTL.Duration = 24 * 30 * time.Hour
-			}
-		} else if snapshot.Spec.AvailableUntil.Before(&nowTime) {
-			snapshot, err = c.updateSnapshotStatus(snapshot, "Failed", "AvailableUntil is set as past.")
-			if err != nil {
-				return err
-			}
-			// When the snapshot failed, exit sync handler here.
-			return nil
-		}
 		snapshot, err = c.updateSnapshotStatus(snapshot, "InQueue", "")
 		if err != nil {
 			return err
 		}
 	}
 
-	// expiration for failed snapshot
-	if snapshot.Status.Phase == "Failed" && snapshot.Status.AvailableUntil.IsZero() {
-		if !snapshot.Spec.AvailableUntil.IsZero() {
-			snapshot.Status.AvailableUntil = snapshot.Spec.AvailableUntil
-			snapshot.Status.TTL.Duration = snapshot.Status.AvailableUntil.Time.Sub(snapshot.ObjectMeta.CreationTimestamp.Time)
-		} else {
-			snapshot.Status.AvailableUntil = metav1.NewTime(snapshot.ObjectMeta.CreationTimestamp.Add(snapshot.Spec.TTL.Duration))
-			snapshot.Status.TTL = snapshot.Spec.TTL
-		}
-		snapshot, err = c.updateSnapshotStatus(snapshot, snapshot.Status.Phase, snapshot.Status.Reason)
-		if err != nil {
-			return err
-		}
-	}
-
-	// expiration edited
-	if snapshot.Status.Phase == "Completed" || snapshot.Status.Phase == "Failed" {
-		if !snapshot.Spec.AvailableUntil.IsZero() && !snapshot.Spec.AvailableUntil.Equal(&snapshot.Status.AvailableUntil) {
-			snapshot.Status.AvailableUntil = snapshot.Spec.AvailableUntil
-			snapshot, err = c.updateSnapshotStatus(snapshot, snapshot.Status.Phase, snapshot.Status.Reason)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	// delete expired
-	if !snapshot.Status.AvailableUntil.IsZero() && snapshot.Status.AvailableUntil.Before(&nowTime) {
-		err := c.cbclientset.ClustersnapshotV1alpha1().Snapshots(c.namespace).Delete(name, &metav1.DeleteOptions{})
-		if err != nil {
-			snapshot, err = c.updateSnapshotStatus(snapshot, "Failed", err.Error())
-			if err != nil {
-				return err
-			}
-		}
-		klog.Infof("snapshot:%s expired - deleted", name)
-		// When the snapshot deleted, exit sync handler here.
-		return nil
-	}
-
 	c.recorder.Event(snapshot, corev1.EventTypeNormal, "Synced", "Snapshot synced successfully")
 	return nil
 }
 
-func (c *Controller) updateSnapshotStatus(snapshot *cbv1alpha1.Snapshot, phase, reason string) (*cbv1alpha1.Snapshot, error) {
+func (c *Controller) updateSnapshotStatus(snapshot *vsv1alpha1.VolumeSnapshot, phase, reason string) (*vsv1alpha1.VolumeSnapshot, error) {
 	snapshotCopy := snapshot.DeepCopy()
 	snapshotCopy.Status.Phase = phase
 	snapshotCopy.Status.Reason = reason
 	klog.Infof("snapshot:%s status %s => %s : %s", snapshot.ObjectMeta.Name, snapshot.Status.Phase, phase, reason)
-	snapshot, err := c.cbclientset.ClustersnapshotV1alpha1().Snapshots(snapshot.Namespace).Update(snapshotCopy)
+	snapshot, err := c.vsclientset.VolumesnapshotV1alpha1().VolumeSnapshots(snapshot.Namespace).Update(snapshotCopy)
 	if err != nil {
 		return snapshot, fmt.Errorf("Failed to update snapshot status for %s : %s", snapshot.ObjectMeta.Name, err.Error())
 	}
@@ -271,7 +203,7 @@ func (c *Controller) enqueueSnapshot(obj interface{}) {
 func (c *Controller) deleteSnapshot(obj interface{}) {
 
 	// convert object into Snapshot and get info for deleting
-	snapshot, ok := obj.(*cbv1alpha1.Snapshot)
+	snapshot, ok := obj.(*vsv1alpha1.Snapshot)
 	if !ok {
 		klog.Warningf("Delete snapshot: Invalid object passed: %#v", obj)
 		return
@@ -282,7 +214,7 @@ func (c *Controller) deleteSnapshot(obj interface{}) {
 		return
 	}
 
-	bucket, err := c.getBucket(c.namespace, snapshot.Spec.ObjectstoreConfig, c.kubeclientset, c.cbclientset, c.insecure)
+	bucket, err := c.getBucket(c.namespace, snapshot.Spec.ObjectstoreConfig, c.kubeclientset, c.vsclientset, c.insecure)
 	if err != nil {
 		runtime.HandleError(err)
 		return
@@ -290,6 +222,12 @@ func (c *Controller) deleteSnapshot(obj interface{}) {
 
 	// Delete snapshot data.
 	klog.Infof("Deleting snapshot %s data from objectstore %s", snapshot.ObjectMeta.Name, snapshot.Spec.ObjectstoreConfig)
+
+	// TODO : call restic forget
+
+	// TODO : create VolumeSnapshot again with phase:DeleteFailed
+
+	// delete VolumeSnapshot backup on objectstore
 	err = bucket.Delete(snapshot.ObjectMeta.Name + ".tgz")
 	if err != nil {
 		runtime.HandleError(err)

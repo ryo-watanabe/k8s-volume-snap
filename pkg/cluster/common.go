@@ -15,8 +15,13 @@ import (
 
 // Cluster interfaces for taking and restoring snapshot of k8s clusters
 type Cluster interface {
-	Snapshot(snapshot *vsv1alpha1.VolumeSnapshot) error
-	Restore(restore *vsv1alpha1.VolumeRestore) error
+	Snapshot(snapshot *vsv1alpha1.VolumeSnapshot,
+		bucket objectstore.Objectstore,
+		localKubeClient kubernetes.Interface) error
+	Restore(restore *vsv1alpha1.VolumeRestore,
+		snapshot *vsv1alpha1.VolumeSnapshot,
+		bucket objectstore.Objectstore,
+		localKubeClient kubernetes.Interface) error
 }
 
 // Cmd for execute cluster commands
@@ -29,13 +34,22 @@ func NewClusterCmd() *Cmd {
 }
 
 // Snapshot takes a volume snapshot
-func (c *Cmd) Snapshot(snapshot *vsv1alpha1.Snapshot) error {
-	return Snapshot(snapshot)
+func (c *Cmd) Snapshot(
+	snapshot *vsv1alpha1.VolumeSnapshot,
+	bucket objectstore.Objectstore,
+	localKubeClient kubernetes.Interface) error {
+
+	return Snapshot(snapshot, bucket, localKubeClient)
 }
 
 // Restore restores volumes form a snapshot
-func (c *Cmd) Restore(restore *vsv1alpha1.Restore) error {
-	return Restore(restore)
+func (c *Cmd) Restore(
+	restore *vsv1alpha1.VolumeRestore,
+	snapshot *vsv1alpha1.VolumeSnapshot,
+	bucket objectstore.Objectstore,
+	localKubeClient kubernetes.Interface) error {
+
+	return Restore(restore, snapshot, bucket, localKubeClient)
 }
 
 // Setup Kubernetes client for target cluster.
@@ -57,6 +71,16 @@ func buildKubeClient(kubeconfig string) (*kubernetes.Clientset, error) {
 	return kubeClient, err
 }
 
+// Get namespace UID
+func getNamespaceUID(name string, kubeClient *kubernetes.Clientset) (string, error) {
+	ns, err := kubeClient.CoreV1().Namespaces().Get(name, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("Error getting namespace UID : %s", err.Error())
+	}
+	return string(ns.ObjectMeta.GetUID()), nil
+}
+
+/*
 // ConfigMapMarker creates and deletes a config map to get a marker for Resource Version
 func ConfigMapMarker(kubeClient kubernetes.Interface, name string) (*corev1.ConfigMap, error) {
 	configMap := &corev1.ConfigMap{
@@ -79,3 +103,4 @@ func ConfigMapMarker(kubeClient kubernetes.Interface, name string) (*corev1.Conf
 	}
 	return configMap, nil
 }
+*/

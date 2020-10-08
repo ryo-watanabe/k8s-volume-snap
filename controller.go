@@ -35,35 +35,31 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
 
-	clientset "github.com/ryo-watanabe/k8s-snap/pkg/client/clientset/versioned"
-	ccscheme "github.com/ryo-watanabe/k8s-snap/pkg/client/clientset/versioned/scheme"
-	informers "github.com/ryo-watanabe/k8s-snap/pkg/client/informers/externalversions/clustersnapshot/v1alpha1"
-	listers "github.com/ryo-watanabe/k8s-snap/pkg/client/listers/clustersnapshot/v1alpha1"
+	clientset "github.com/ryo-watanabe/k8s-volume-snap/pkg/client/clientset/versioned"
+	ccscheme "github.com/ryo-watanabe/k8s-volume-snap/pkg/client/clientset/versioned/scheme"
+	informers "github.com/ryo-watanabe/k8s-volume-snap/pkg/client/informers/externalversions/volumesnapshot/v1alpha1"
+	listers "github.com/ryo-watanabe/k8s-volume-snap/pkg/client/listers/volumesnapshot/v1alpha1"
 
-	"github.com/ryo-watanabe/k8s-snap/pkg/cluster"
-	"github.com/ryo-watanabe/k8s-snap/pkg/objectstore"
+	"github.com/ryo-watanabe/k8s-volume-snap/pkg/cluster"
+	"github.com/ryo-watanabe/k8s-volume-snap/pkg/objectstore"
 )
 
-const controllerAgentName = "k8s-snapshot"
+const controllerAgentName = "k8s-volume-snapshot"
 
 // Controller is the controller implementation for Snapshot and Restore resources
 type Controller struct {
 	kubeclientset kubernetes.Interface
-	dynamic       dynamic.Interface
-	cbclientset   clientset.Interface
+	vsclientset   clientset.Interface
 
-	snapshotLister  listers.SnapshotLister
+	snapshotLister  listers.VolumeSnapshotLister
 	snapshotsSynced cache.InformerSynced
-	restoreLister   listers.RestoreLister
+	restoreLister   listers.VolumeRestoreLister
 	restoresSynced  cache.InformerSynced
 
 	snapshotQueue workqueue.RateLimitingInterface
 	restoreQueue  workqueue.RateLimitingInterface
 	recorder      record.EventRecorder
 
-	housekeepstore   bool
-	restoresnapshots bool
-	validatefileinfo bool
 	insecure         bool
 	createbucket     bool
 
@@ -79,12 +75,11 @@ type Controller struct {
 // NewController returns a new controller
 func NewController(
 	kubeclientset kubernetes.Interface,
-	dynamic dynamic.Interface,
-	cbclientset clientset.Interface,
-	snapshotInformer informers.SnapshotInformer,
-	restoreInformer informers.RestoreInformer,
+	vsclientset clientset.Interface,
+	snapshotInformer informers.VolumeSnapshotInformer,
+	restoreInformer informers.VolumeRestoreInformer,
 	namespace string,
-	housekeepstore, restoresnapshots, validatefileinfo, insecure, createbucket bool,
+	insecure, createbucket bool,
 	maxretryelapsedsec int,
 	clusterCmd cluster.Cluster) *Controller {
 	//bucket *objectstore.Bucket) *Controller {
@@ -101,8 +96,7 @@ func NewController(
 
 	controller := &Controller{
 		kubeclientset:      kubeclientset,
-		cbclientset:        cbclientset,
-		dynamic:            dynamic,
+		vsclientset:        vsclientset,
 		snapshotLister:     snapshotInformer.Lister(),
 		snapshotsSynced:    snapshotInformer.Informer().HasSynced,
 		restoreLister:      restoreInformer.Lister(),
@@ -110,9 +104,6 @@ func NewController(
 		snapshotQueue:      workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Snapshots"),
 		restoreQueue:       workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Restores"),
 		recorder:           recorder,
-		housekeepstore:     housekeepstore,
-		restoresnapshots:   restoresnapshots,
-		validatefileinfo:   validatefileinfo,
 		insecure:           insecure,
 		createbucket:       createbucket,
 		maxretryelapsedsec: maxretryelapsedsec,
@@ -167,13 +158,13 @@ func (c *Controller) Run(snapshotthreads, restorethreads int, stopCh <-chan stru
 	//klog.Info("Checking CRDs")
 
 	klog.Info("Checking objectstore buckets")
-	osConfigs, err := c.cbclientset.ClustersnapshotV1alpha1().ObjectstoreConfigs(c.namespace).List(metav1.ListOptions{})
+	osConfigs, err := c.vsclientset.VolumesnapshotV1alpha1().ObjectstoreConfigs(c.namespace).List(metav1.ListOptions{})
 	if err != nil {
 		klog.Fatalf("List Objectstore Config error : %s", err.Error())
 	}
 	for _, os := range osConfigs.Items {
 
-		bucket, err := c.getBucket(c.namespace, os.ObjectMeta.Name, c.kubeclientset, c.cbclientset, c.insecure)
+		bucket, err := c.getBucket(c.namespace, os.ObjectMeta.Name, c.kubeclientset, c.vsclientset, c.insecure)
 		if err != nil {
 			klog.Fatalf("Get bucket error for ObjectstoreConfig %s * %s", os.ObjectMeta.Name, err.Error())
 		}
@@ -206,20 +197,12 @@ func (c *Controller) Run(snapshotthreads, restorethreads int, stopCh <-chan stru
 	}
 
 	// Start the informer factories to begin populating the informer caches
-	klog.Info("Starting snapshot controller")
+	klog.Info("Starting volume snapshot controller")
 
 	// Wait for the caches to be synced before starting workers
 	klog.Info("Waiting for informer caches to sync")
 	if ok := cache.WaitForCacheSync(stopCh, c.snapshotsSynced, c.restoresSynced); !ok {
 		return fmt.Errorf("failed to wait for caches to sync")
-	}
-
-	klog.Info("Initial object sync")
-
-	// Initial object sync: set restoresnapshots=true for resource recovery.
-	err = c.syncObjects(false, c.restoresnapshots, c.validatefileinfo)
-	if err != nil {
-		klog.Errorf("Object sync error : %s", err.Error())
 	}
 
 	klog.Info("Starting workers")
@@ -232,9 +215,6 @@ func (c *Controller) Run(snapshotthreads, restorethreads int, stopCh <-chan stru
 	for i := 0; i < restorethreads; i++ {
 		go wait.Until(c.runRestoreWorker, time.Second, stopCh)
 	}
-
-	// Start object syncer
-	go wait.Until(c.runObjectSyncer, time.Duration(300)*time.Second, stopCh)
 
 	klog.Info("Started workers")
 	<-stopCh
