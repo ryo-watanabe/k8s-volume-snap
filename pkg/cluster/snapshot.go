@@ -14,6 +14,7 @@ import (
 	//corev1 "k8s.io/api/core/v1"
 	"github.com/cenkalti/backoff"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/klog"
 
 	vsv1alpha1 "github.com/ryo-watanabe/k8s-volume-snap/pkg/apis/volumesnapshot/v1alpha1"
 	"github.com/ryo-watanabe/k8s-volume-snap/pkg/objectstore"
@@ -155,11 +156,28 @@ func snapshotVolumes(
 		volumePath := ""
 		nodeName := ""
 		for _, node := range(nodes.Items) {
+			// Do not use tainted node
+			tainted := false
+			if len(node.Spec.Taints) > 0 {
+				for _, taint := range(node.Spec.Taints) {
+					if taint.Effect == "NoSchedule" {
+						tainted = true
+						break
+					}
+				}
+			}
+			if tainted {
+				continue
+			}
+			// Glob volume path
 			globJob := r.globberJob(pvc.Spec.VolumeName, node.GetName())
-			volumePath, err = DoResticJob(globJob, localKubeClient, 5)
+			volumePath, err = DoResticJob(globJob, kubeClient, 5)
 			if err == nil {
+				klog.V(4).Infof("Globber output : %s", volumePath)
 				nodeName = node.GetName()
 				break
+			} else {
+				klog.V(4).Infof("Globber log : %s", err.Error())
 			}
 		}
 		if nodeName == "" {
@@ -174,6 +192,7 @@ func snapshotVolumes(
 			ClaimSpec: pvc.Spec,
 			SnapshotReady: false,
 		}
+		volumePath = strings.TrimSuffix(volumePath, "\n")
 		if pv.Spec.CSI != nil {
 			volumePath = volumePath + "/mount"
 		}

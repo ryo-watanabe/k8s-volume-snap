@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: k8s-volume-snap
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: k8s-volume-snap
+  labels:
+    component: k8s-volume-snap
+subjects:
+  - kind: ServiceAccount
+    namespace: k8s-volume-snap
+    name: default
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io

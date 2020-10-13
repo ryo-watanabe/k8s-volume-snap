@@ -1,0 +1,10 @@
+apiVersion: clustersnapshot.rywt.io/v1alpha1
+kind: ObjectstoreConfig
+metadata:
+  name: k8s-snap-ap-northeast-1
+  namespace: k8s-volume-snap
+spec:
+  region: ap-northeast-1
+  bucket: k8s-volume-snap
+  cloudCredentialSecret: k8s-volume-snap-ap-northeast-1
+  roleArn: arn:aws:iam::123456789012:role/example-role

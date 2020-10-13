@@ -8,13 +8,14 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
-	"github.com/golang/glog"
+	//"github.com/golang/glog"
 	//"github.com/golang/protobuf/ptypes"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/klog"
 )
 
 type ResticSnapshot struct {
@@ -85,7 +86,7 @@ func (r *Restic)repository() string {
 }
 
 func retryNotifyRestic(err error, wait time.Duration) {
-	glog.Infof("%s : will be checked again in %.2f seconds", err.Error(), wait.Seconds())
+	klog.V(4).Infof("%s : will be checked again in %.2f seconds", err.Error(), wait.Seconds())
 }
 
 // DoResticJob executes restic Job with backing off
@@ -276,7 +277,7 @@ func (r *Restic) resticJobRestore(snapId, volumeId, pvcName, pvcNamespace string
 // restic job pod
 func (r *Restic) resticJob(name, namespace string) *batchv1.Job {
 
-	backoffLimit := int32(2)
+	backoffLimit := int32(0)
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -307,6 +308,7 @@ func (r *Restic) resticJob(name, namespace string) *batchv1.Job {
 									Value: r.repository(),
 								},
 							},
+							ImagePullPolicy: "IfNotPresent",
 						},
 					},
 					RestartPolicy: "Never",
@@ -333,10 +335,10 @@ func (r *Restic) resticJob(name, namespace string) *batchv1.Job {
 // pv path globber
 func (r *Restic) globberJob(volumeId, nodeName string) *batchv1.Job {
 
-	backoffLimit := int32(2)
+	backoffLimit := int32(0)
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      r.id,
+			Name:      "glob-" + volumeId + "-" + nodeName,
 			Namespace: "default",
 		},
 		Spec: batchv1.JobSpec{
@@ -347,10 +349,11 @@ func (r *Restic) globberJob(volumeId, nodeName string) *batchv1.Job {
 							Name:  "globber",
 							Image: "alpine",
 							Command: []string{
-								"ls",
-								"-d",
-								"/var/lib/kubelet/pods/*/volumes/*/" + volumeId,
+								"/bin/sh",
+								"-c",
+								"ls -d /var/lib/kubelet/pods/*/volumes/*/" + volumeId,
 							},
+							ImagePullPolicy: "IfNotPresent",
 						},
 					},
 					RestartPolicy: "Never",

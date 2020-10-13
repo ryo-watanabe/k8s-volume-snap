@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8s-volume-snap
+  namespace: k8s-volume-snap
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: k8s-volume-snap
+  template:
+    metadata:
+      labels:
+        app: k8s-volume-snap
+    spec:
+      containers:
+        - name: k8s-volume-snap
+          image: [image]:[TAG]
+          env:
+          command:
+            - /k8s-voluem-snap
+            - --namespace=k8s-volume-snap

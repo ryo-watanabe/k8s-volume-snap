@@ -236,7 +236,7 @@ func getBucketFunc(namespace, objectstoreConfig string, kubeclient kubernetes.In
 		return nil, err
 	}
 	bucket := objectstore.NewBucket(osConfig.ObjectMeta.Name, string(cred.Data["accesskey"]),
-		string(cred.Data["secretkey"]), string(cred.Data["rolearn"]),
+		string(cred.Data["secretkey"]), osConfig.Spec.RoleArn,
 		osConfig.Spec.Endpoint, osConfig.Spec.Region, osConfig.Spec.Bucket, insecure)
 
 	return bucket, nil

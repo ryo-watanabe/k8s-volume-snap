@@ -1,0 +1,110 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: volumesnapshots.volumesnapshot.rywt.io
+spec:
+  group: volumesnapshot.rywt.io
+  version: v1alpha1
+  scope: Namespaced
+  names:
+    kind: VolumeSnapshot
+    plural: volumesnapshots
+  additionalPrinterColumns:
+  - name: CLUSTER
+    type: string
+    description: Cluster ID.
+    JSONPath: .spec.clusterName
+  - name: TIMESTAMP
+    type: string
+    description: Timestamp of snapshot.
+    JSONPath: .status.snapshotEndTime
+  - name: VOLUMECLAIMS
+    type: integer
+    description: Number of excluded by conditions.
+    JSONPath: .status.numVolumeClaims
+  - name: OBJECTSTORE
+    type: string
+    description: Objectstore config name.
+    JSONPath: .spec.objectstoreConfig
+  - name: STATUS
+    type: string
+    description: Status of snapshot.
+    JSONPath: .status.phase
+  - name: AGE
+    type: date
+    description: Timestamp of snapshot.
+    JSONPath: .metadata.creationTimestamp
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: volumerestores.volumesnapshot.rywt.io
+spec:
+  group: volumesnapshot.rywt.io
+  version: v1alpha1
+  scope: Namespaced
+  names:
+    kind: VolumeRestore
+    plural: volumerestores
+  additionalPrinterColumns:
+  - name: CLUSTER
+    type: string
+    description: Cluster ID.
+    JSONPath: .spec.clusterName
+  - name: SNAPSHOT
+    type: string
+    description: Snapshot data ID used for restore.
+    JSONPath: .spec.volumeSnapshotName
+  - name: TIMESTAMP
+    type: string
+    description: Timestamp of restore.
+    JSONPath: .status.restoreTimestamp
+  - name: VOLUMECLAIMS
+    type: integer
+    description: Number of restored volume claims.
+    JSONPath: .status.numVolumeClaims
+  - name: FAILED
+    type: integer
+    description: Number of restore failed volumes.
+    JSONPath: .status.NumFailedVolumeClaims
+  - name: STATUS
+    type: string
+    description: Status of snapshot.
+    JSONPath: .status.phase
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: objectstoreconfigs.volumesnapshot.rywt.io
+spec:
+  group: volumesnapshot.rywt.io
+  version: v1alpha1
+  scope: Namespaced
+  names:
+    kind: ObjectstoreConfig
+    plural: objectstoreconfigs
+  additionalPrinterColumns:
+  - name: REGION
+    type: string
+    description: Region.
+    JSONPath: .spec.region
+  - name: ENDPOINT
+    type: string
+    description: Endpoint.
+    JSONPath: .spec.endpoint
+  - name: CREDENTIAL
+    type: string
+    description: Cloud credential secret name.
+    JSONPath: .spec.cloudCredentialSecret
+  - name: BUCKET
+    type: string
+    description: Bucket name.
+    JSONPath: .spec.bucket
+  - name: ROLEARN
+    type: string
+    description: Role ARN.
+    JSONPath: .spec.roleArn
+  - name: AGE
+    type: date
+    description: Timestamp of snapshot.
+    JSONPath: .metadata.creationTimestamp

@@ -33,7 +33,7 @@ type VolumeClaim struct {
 	Namespace     string                           `json:"namespace"` // Namespace of source PVC
 	ClaimSpec     corev1.PersistentVolumeClaimSpec `json:"claimSpec"` // Spec of source PVC
 	SnapshotId    string                           `json:"snapshotId"`
-	SnapshotTime  metav1.Time                      `json:"snapshotStartTime"`
+	SnapshotTime  metav1.Time                      `json:"snapshotTime"`
 	SnapshotSize  int64                            `json:"snapshotSize"`
 	SnapshotReady bool                             `json:"snapshotReady"`
 }

@@ -191,26 +191,22 @@ const policyString = `{
 	"Version":"2012-10-17",
 	"Statement":[
 		{
-			"Action":[
-				"s3:GetBucketLocation",
-				"s3:ListBucket"
-			],
+			"Action":["s3:GetBucketLocation"],
 			"Effect":"Allow",
-			"Resource":[
-				"arn:aws:s3:::PATH_FOR_CLUSTER_ID"
-			],
+			"Resource":["arn:aws:s3:::BUCKET_NAME"],
 			"Sid":"AllowStatement1"
 		},
 		{
-			"Action":[
-				"s3:GetObject",
-				"s3:PutObject",
-				"s3:DeleteObject"
-			],
+			"Action":["s3:ListBucket"],
 			"Effect":"Allow",
-			"Resource":[
-				"arn:aws:s3:::PATH_FOR_CLUSTER_ID/*"
-			],
+			"Resource":["arn:aws:s3:::BUCKET_NAME"],
+			"Condition":{"StringLike":{"s3:prefix": "PATH_FOR_CLUSTER_ID/*"}},
+			"Sid":"AllowStatement1B"
+		},
+		{
+			"Action":["s3:GetObject","s3:PutObject","s3:DeleteObject"],
+			"Effect":"Allow",
+			"Resource":["arn:aws:s3:::BUCKET_NAME/PATH_FOR_CLUSTER_ID/*"],
 			"Sid":"AllowStatement2"
 		}
 	]
@@ -225,8 +221,13 @@ func (b *Bucket) CreateAssumeRole(clusterId string, durationSeconds int64) (*sts
 	}
 	// create assume role
 	svc := b.newSTSfunc(sess)
-	policy := strings.Trim(strings.ReplaceAll(policyString, "PATH_FOR_CLUSTER_ID", clusterId), "\n\t")
+
+	policy := strings.ReplaceAll(policyString, "BUCKET_NAME", b.BucketName)
+	policy = strings.ReplaceAll(policy, "PATH_FOR_CLUSTER_ID", clusterId)
+	policy = strings.Replace(policy, "\n", "", -1)
+	policy = strings.Replace(policy, "\t", "", -1)
 	klog.Infof("Creating AssumeRole policy:%s", policy)
+
 	input := &sts.AssumeRoleInput{
 		DurationSeconds: &durationSeconds,
 		Policy:          aws.String(policy),

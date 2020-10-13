@@ -48,12 +48,8 @@ var (
 
 func main() {
 
-	////// For client-go > 8.0 ??
-	klog.InitFlags(nil)
-	flag.Set("logtostderr", "true")
 	flag.Parse()
-	klog.Infof("k8s-snap version:%s revision:%s", version, revision)
-	klog.Flush()
+	klog.Infof("k8s-volume-snap version:%s revision:%s", version, revision)
 
 	// set up signals so we handle the first shutdown signal gracefully
 	stopCh := signals.SetupSignalHandler()
