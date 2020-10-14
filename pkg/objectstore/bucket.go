@@ -18,7 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/aws/aws-sdk-go/service/sts/stsiface"
 
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 const crPath = "crs/"

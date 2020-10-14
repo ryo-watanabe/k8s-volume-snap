@@ -10,7 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
 	"github.com/cenkalti/backoff"
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
 
 	vsv1alpha1 "github.com/ryo-watanabe/k8s-volume-snap/pkg/apis/volumesnapshot/v1alpha1"
 	"github.com/ryo-watanabe/k8s-volume-snap/pkg/objectstore"
@@ -61,7 +61,7 @@ func restoreResources(
 	// get 1h valid credentials to access objectstore
 	creds, err := bucket.CreateAssumeRole(clusterId, 7200)
 	if err != nil {
-		return fmt.Errorf("Getting tempraly credentials failed : %s", err.Error())
+		return fmt.Errorf("Getting temporaly credentials failed : %s", err.Error())
 	}
 
 	// prepare user restic / admin restic
@@ -136,6 +136,7 @@ func restoreResources(
 			},
 			Spec: snapPvc.ClaimSpec,
 		}
+		newPvc.Spec.VolumeName = ""
 		_, err = kubeClient.CoreV1().PersistentVolumeClaims(snapPvc.Namespace).Create(newPvc)
 		if err != nil {
 			volumeRestoreFailedWith(
@@ -197,7 +198,7 @@ func restoreResources(
 }
 
 func retryNotifyPvc(err error, wait time.Duration) {
-	glog.Infof("%s : will be checked again in %.2f seconds", err.Error(), wait.Seconds())
+	klog.V(4).Infof("%s : will be checked again in %.2f seconds", err.Error(), wait.Seconds())
 }
 
 func volumeRestoreFailedWith(err error, restore *vsv1alpha1.VolumeRestore,

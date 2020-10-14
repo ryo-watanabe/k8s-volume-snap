@@ -89,9 +89,9 @@ func snapshotVolumes(
 	if err != nil {
 		// This is the first time that objectstore accessed
 		if objectstorePermError(err.Error()) {
-			return backoff.Permanent(fmt.Errorf("Getting tempraly credentials failed : %s", err.Error()))
+			return backoff.Permanent(fmt.Errorf("Getting temporaly credentials failed : %s", err.Error()))
 		}
-		return fmt.Errorf("Getting tempraly credentials failed : %s", err.Error())
+		return fmt.Errorf("Getting temporaly credentials failed : %s", err.Error())
 	}
 
 	blog.Infof("Backing up volumes from cluster:%s", clusterId)

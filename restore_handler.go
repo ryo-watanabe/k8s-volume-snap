@@ -9,10 +9,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
 	vsv1alpha1 "github.com/ryo-watanabe/k8s-volume-snap/pkg/apis/volumesnapshot/v1alpha1"
-	"github.com/ryo-watanabe/k8s-volume-snap/pkg/objectstore"
 )
 
 // runWorker is a long-running function that will continually call the
@@ -111,8 +110,7 @@ func (c *Controller) restoreSyncHandler(key string, queueonly bool) error {
 		}
 
 		// bucket
-		osConfig, err := c.vsclientset.VolumesnapshotV1alpha1().ObjectstoreConfigs(c.namespace).Get(
-			snapshot.Spec.ObjectstoreConfig, metav1.GetOptions{})
+		bucket, err := c.getBucket(c.namespace, snapshot.Spec.ObjectstoreConfig, c.kubeclientset, c.vsclientset, c.insecure)
 		if err != nil {
 			restore, err = c.updateRestoreStatus(restore, "Failed", err.Error())
 			if err != nil {
@@ -120,20 +118,7 @@ func (c *Controller) restoreSyncHandler(key string, queueonly bool) error {
 			}
 			return nil
 		}
-
-		// cloud credentials secret
-		cred, err := c.kubeclientset.CoreV1().Secrets(c.namespace).Get(
-			osConfig.Spec.CloudCredentialSecret, metav1.GetOptions{})
-		if err != nil {
-			restore, err = c.updateRestoreStatus(restore, "Failed", err.Error())
-			if err != nil {
-				return err
-			}
-			return nil
-		}
-		bucket := objectstore.NewBucket(osConfig.ObjectMeta.Name, string(cred.Data["accesskey"]),
-			string(cred.Data["secretkey"]), string(cred.Data["rolearn"]),
-			osConfig.Spec.Endpoint, osConfig.Spec.Region, osConfig.Spec.Bucket, c.insecure)
+		klog.Infof("- Objectstore Config name:%s endpoint:%s bucket:%s", bucket.GetName(), bucket.GetEndpoint(), bucket.GetBucketName())
 
 		// do restore
 		err = c.clusterCmd.Restore(restore, snapshot, bucket, c.kubeclientset)
