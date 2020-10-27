@@ -6,6 +6,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	storagev1 "k8s.io/client-go/kubernetes/typed/storage/v1"
 
 	vsv1alpha1 "github.com/ryo-watanabe/k8s-volume-snap/pkg/apis/volumesnapshot/v1alpha1"
 	"github.com/ryo-watanabe/k8s-volume-snap/pkg/objectstore"
@@ -67,6 +68,25 @@ func buildKubeClient(kubeconfig string) (*kubernetes.Clientset, error) {
 		return nil, fmt.Errorf("Error building kubernetes clientset: %s", err.Error())
 	}
 	return kubeClient, err
+}
+
+// Setup Storage v1 client for target cluster.
+func buildStorageV1Client(kubeconfig string) (*storagev1.StorageV1Client, error) {
+	// Check if Kubeconfig available.
+	if kubeconfig == "" {
+		return nil, fmt.Errorf("Cannot create Kubeconfig : Kubeconfig not given")
+	}
+
+	// Setup Rancher Kubeconfig to access customer cluster.
+	cfg, err := clientcmd.RESTConfigFromKubeConfig([]byte(kubeconfig))
+	if err != nil {
+		return nil, fmt.Errorf("Error building kubeconfig: %s", err.Error())
+	}
+	client, err := storagev1.NewForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("Error building kubernetes clientset: %s", err.Error())
+	}
+	return client, err
 }
 
 // Get namespace UID

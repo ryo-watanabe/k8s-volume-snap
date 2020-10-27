@@ -18,10 +18,26 @@ spec:
     type: string
     description: Timestamp of snapshot.
     JSONPath: .status.snapshotEndTime
-  - name: VOLUMECLAIMS
+  - name: VOLUMES
     type: integer
-    description: Number of excluded by conditions.
+    description: Number of volumes in snapshot.
     JSONPath: .status.numVolumeClaims
+  - name: READY
+    type: integer
+    description: Number of ready volumes.
+    JSONPath: .status.readyVolumeClaims
+  - name: SKIP
+    type: integer
+    description: Number of skipped volume claims in the cluster.
+    JSONPath: .status.skippedClaims
+  - name: FILES
+    type: integer
+    description: Total files in snapshot.
+    JSONPath: .status.totalFiles
+  - name: SIZE
+    type: integer
+    description: Total bytes in snapshot.
+    JSONPath: .status.totalBytes
   - name: OBJECTSTORE
     type: string
     description: Objectstore config name.

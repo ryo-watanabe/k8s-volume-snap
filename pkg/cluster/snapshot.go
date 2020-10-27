@@ -11,10 +11,10 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	//corev1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"github.com/cenkalti/backoff"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog"
+	storagev1 "k8s.io/client-go/kubernetes/typed/storage/v1"
 
 	vsv1alpha1 "github.com/ryo-watanabe/k8s-volume-snap/pkg/apis/volumesnapshot/v1alpha1"
 	"github.com/ryo-watanabe/k8s-volume-snap/pkg/objectstore"
@@ -60,13 +60,19 @@ func Snapshot(
 	if err != nil {
 		return err
 	}
+	// StorageV1Client for external cluster.
+	storageClient, err := buildStorageV1Client(snapshot.Spec.Kubeconfig)
+	if err != nil {
+		return err
+	}
 
-	return snapshotVolumes(snapshot, bucket, kubeClient, localKubeClient)
+	return snapshotVolumes(snapshot, bucket, storageClient, kubeClient, localKubeClient)
 }
 
 func snapshotVolumes(
 	snapshot *vsv1alpha1.VolumeSnapshot,
 	bucket objectstore.Objectstore,
+	storageClient storagev1.StorageV1Interface,
 	kubeClient, localKubeClient kubernetes.Interface) error {
 
 	// Snapshot log
@@ -126,12 +132,12 @@ func snapshotVolumes(
 		return fmt.Errorf("Error getting PVC list : %s", err.Error())
 	}
 
-	// Get nodes list
-	nodes, err := kubeClient.CoreV1().Nodes().List(metav1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("Error getting node list : %s", err.Error())
-	}
-
+	// snapshot status init
+	snapshot.Status.TotalBytes = 0
+	snapshot.Status.TotalFiles = 0
+	snapshot.Status.NumVolumeClaims = 0
+	snapshot.Status.ReadyVolumeClaims = 0
+	snapshot.Status.SkippedClaims = 0
 	snapshot.Status.SnapshotStartTime = metav1.Now()
 
 	// take snapshots of PVCs
@@ -141,49 +147,37 @@ func snapshotVolumes(
 
 		// skip not bound PVs
 		if pvc.Status.Phase != "Bound" {
-			blog.Infof("Skipping - PVC not bound")
+			snapshot.Status.SkippedClaims++
+			blog.Infof("  Skipping - PVC not bound")
 			continue
 		}
 
 		// get pv
 		pv, err := kubeClient.CoreV1().PersistentVolumes().Get(pvc.Spec.VolumeName, metav1.GetOptions{})
 		if err != nil {
-			blog.Infof("Skipping - Error getting PV : %s", err.Error())
+			snapshot.Status.SkippedClaims++
+			blog.Infof("  Skipping - Error getting PV : %s", err.Error())
 			continue
 		}
 
-		// glob pv mount path on node
-		volumePath := ""
-		nodeName := ""
-		for _, node := range(nodes.Items) {
-			// Do not use tainted node
-			tainted := false
-			if len(node.Spec.Taints) > 0 {
-				for _, taint := range(node.Spec.Taints) {
-					if taint.Effect == "NoSchedule" {
-						tainted = true
-						break
-					}
-				}
-			}
-			if tainted {
-				continue
-			}
-			// Glob volume path
-			globJob := r.globberJob(pvc.Spec.VolumeName, node.GetName())
-			volumePath, err = DoResticJob(globJob, kubeClient, 5)
-			if err == nil {
-				klog.V(4).Infof("Globber output : %s", volumePath)
-				nodeName = node.GetName()
-				break
-			} else {
-				klog.V(4).Infof("Globber log : %s", err.Error())
-			}
-		}
-		if nodeName == "" {
-			blog.Infof("Skipping - PV not mounted on any node (not in use)")
+		// get mounted node
+		nodeName, err := getPVCMountedNode(&pvc, storageClient, kubeClient)
+		if err != nil {
+			snapshot.Status.SkippedClaims++
+			blog.Infof("  Skipping - PV not in use : %s", err.Error())
 			continue
 		}
+		blog.Infof("  Mounted node : %s", nodeName)
+
+		// Glob volume path
+		globJob := r.globberJob(pvc.Spec.VolumeName, nodeName)
+		volumePath, err := DoResticJob(globJob, kubeClient, 5)
+		if err != nil {
+			snapshot.Status.SkippedClaims++
+			blog.Infof("  Skipping - Error globbing volume path : %s", err.Error())
+			continue
+		}
+		blog.Infof("  Volume Path : %s", volumePath)
 
 		// take snapshot
 		snapPvc := vsv1alpha1.VolumeClaim{
@@ -199,21 +193,25 @@ func snapshotVolumes(
 		snapJob := r.resticJobBackup(pvc.Spec.VolumeName, volumePath, nodeName)
 		output, err := DoResticJob(snapJob, kubeClient, 30)
 		if err != nil {
-			blog.Warningf("Error taking snapshot PVC %s : %s", pvc.GetName(), err.Error())
+			blog.Warningf("!! Error taking snapshot PVC %s : %s", pvc.GetName(), err.Error())
 		} else {
 			// Perse backup summary
 			jsonBytes := []byte(output)
 			summary := new(ResticBackupSummary)
 			err = json.Unmarshal(jsonBytes, summary)
 			if err != nil {
-				blog.Warningf("Error persing restic backup summary : %s", err.Error())
+				blog.Warningf("!! Error persing restic backup summary : %s", err.Error())
 			}
 			snapPvc.SnapshotId = summary.SnapshotId
 			snapPvc.SnapshotSize = summary.TotalBytesProcessed
+			snapPvc.SnapshotFiles = summary.TotalFilesProcessed
 			snapPvc.SnapshotTime = metav1.Now()
 			snapPvc.SnapshotReady = true
-			blog.Infof("Backing up pvc completed : %s/%s", pvc.GetNamespace(), pvc.GetName())
+			blog.Infof("-- completed")
+
 			snapshot.Status.ReadyVolumeClaims++
+			snapshot.Status.TotalBytes += snapPvc.SnapshotSize
+			snapshot.Status.TotalFiles += snapPvc.SnapshotFiles
 		}
 		snapshot.Spec.VolumeClaims = append(snapshot.Spec.VolumeClaims, snapPvc)
 		snapshot.Status.NumVolumeClaims++
@@ -281,6 +279,58 @@ func snapshotVolumes(
 	blog.Infof("-- snapshot end time   : %s", snapshot.Status.SnapshotEndTime)
 	blog.Infof("-- num volume claims   : %d", snapshot.Status.NumVolumeClaims)
 	blog.Infof("-- ready volume claims : %d", snapshot.Status.ReadyVolumeClaims)
+	blog.Infof("-- skipped claims      : %d", snapshot.Status.SkippedClaims)
+	blog.Infof("-- total files         : %d", snapshot.Status.TotalFiles)
+	blog.Infof("-- total bytes         : %d", snapshot.Status.TotalBytes)
 
 	return nil
+}
+
+func getPVCMountedNode(
+	pvc *corev1.PersistentVolumeClaim,
+	storageClient storagev1.StorageV1Interface,
+	kubeClient kubernetes.Interface) (string, error) {
+
+	// check volume attachment
+	attaches, err := storageClient.VolumeAttachments().List(metav1.ListOptions{})
+	if err != nil {
+		return "", fmt.Errorf("Error getting volumeattachments : %s", err.Error())
+	}
+	for _, attach := range(attaches.Items) {
+		if *attach.Spec.Source.PersistentVolumeName == pvc.Spec.VolumeName {
+			if attach.Status.Attached {
+				return attach.Spec.NodeName, nil
+			}
+		}
+	}
+
+	// Check mounts not informed in volumeattachments
+	pods, err := kubeClient.CoreV1().Pods(pvc.GetNamespace()).List(metav1.ListOptions{})
+	if err != nil {
+		return "", fmt.Errorf("Error getting pods : %s", err.Error())
+	}
+	for _, pod := range(pods.Items) {
+		if pod.Status.Phase != "Running" {
+			continue
+		}
+		volumeName := ""
+		for _, vol := range(pod.Spec.Volumes) {
+			if vol.VolumeSource.PersistentVolumeClaim != nil && vol.VolumeSource.PersistentVolumeClaim.ClaimName == pvc.GetName() {
+				volumeName = vol.Name
+				break
+			}
+		}
+		if volumeName != "" {
+			for _, container := range(pod.Spec.Containers) {
+				for _, mount := range(container.VolumeMounts) {
+					if mount.Name == volumeName {
+						return pod.Spec.NodeName, nil
+					}
+				}
+			}
+		}
+	}
+
+	// Mount not found
+	return "", fmt.Errorf("Mount not found")
 }

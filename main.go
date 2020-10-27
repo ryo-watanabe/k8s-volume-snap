@@ -23,6 +23,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
+	"k8s.io/client-go/rest"
 
 	// Uncomment the following line to load the gcp plugin (only required to authenticate against GKE clusters).
 	// _ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -55,9 +56,18 @@ func main() {
 	// set up signals so we handle the first shutdown signal gracefully
 	stopCh := signals.SetupSignalHandler()
 
-	cfg, err := clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
-	if err != nil {
-		klog.Fatalf("Error building kubeconfig: %s", err.Error())
+	var cfg *rest.Config
+	var err error
+	if kubeconfig == "" {
+		cfg, err = rest.InClusterConfig()
+		if err != nil {
+			klog.Fatalf("Error building kubeconfig in cluster: %s", err.Error())
+		}
+	} else {
+		cfg, err = clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
+		if err != nil {
+			klog.Fatalf("Error building kubeconfig out of cluster: %s", err.Error())
+		}
 	}
 
 	kubeClient, err := kubernetes.NewForConfig(cfg)
@@ -98,5 +108,5 @@ func init() {
 	flag.IntVar(&restorethreads, "restorethreads", 2, "Number of restore threads")
 	flag.BoolVar(&insecure, "insecure", false, "Skip ssl certificate verification on connecting object store")
 	flag.BoolVar(&createbucket, "createbucket", false, "Create bucket if not exists")
-	flag.IntVar(&maxretryelapsedsec, "maxretryelapsedsec", 300, "Max elaspsed seconds to retry snapshot")
+	flag.IntVar(&maxretryelapsedsec, "maxretryelapsedsec", 3600, "Max elaspsed seconds to retry snapshot")
 }
