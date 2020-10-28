@@ -329,6 +329,9 @@ func (r *Restic) resticJob(name, namespace string) *batchv1.Job {
 		)
 	}
 
+	// The wildcard toleration
+	job.Spec.Template.Spec.Tolerations = append(job.Spec.Template.Spec.Tolerations, corev1.Toleration{Operator: "Exists"})
+
 	return job
 }
 
@@ -386,6 +389,8 @@ func (r *Restic) globberJob(volumeId, nodeName string) *batchv1.Job {
 		job.Spec.Template.Spec.Containers[0].VolumeMounts,
 		volumeMount,
 	)
+	// The wildcard toleration
+	job.Spec.Template.Spec.Tolerations = append(job.Spec.Template.Spec.Tolerations, corev1.Toleration{Operator: "Exists"})
 
 	return job
 }
