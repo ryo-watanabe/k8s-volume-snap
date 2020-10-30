@@ -216,16 +216,27 @@ func (c *Controller) deleteSnapshot(obj interface{}) {
 		return
 	}
 
-	// Delete snapshot data.
+	// delete snapshot data.
 	klog.Infof("Deleting snapshot %s data from objectstore %s", snapshot.ObjectMeta.Name, snapshot.Spec.ObjectstoreConfig)
-
-	// TODO : call restic forget
-
-	// TODO : create VolumeSnapshot again with phase:DeleteFailed
-
-	// delete VolumeSnapshot backup on objectstore
-	err = bucket.Delete(snapshot.ObjectMeta.Name + ".tgz")
+	err = c.clusterCmd.DeleteSnapshot(snapshot, bucket, c.kubeclientset)
 	if err != nil {
-		runtime.HandleError(err)
+
+		klog.Warningf("Deleting snapshot error status %s => DeleteFailed : %s", snapshot.Status.Phase, err.Error())
+
+		// create VolumeSnapshot again with phase:DeleteFailed
+		snapshot.Status.Phase = "DeleteFailed"
+		snapshot.Status.Reason = err.Error()
+		snapshot.ObjectMeta.SetResourceVersion("")
+		snapshot.ObjectMeta.SetUID("")
+		snapshot, err := c.vsclientset.VolumesnapshotV1alpha1().VolumeSnapshots(snapshot.Namespace).Create(snapshot)
+		if err != nil {
+			runtime.HandleError(
+				fmt.Errorf("Failed to create snapshot with status DeleteFailed %s : %s", snapshot.ObjectMeta.Name, err.Error()),
+			)
+		}
+		return
 	}
+
+	// delete repository when there is no snapshot for the cluster
+	// TODO
 }

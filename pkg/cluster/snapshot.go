@@ -21,34 +21,6 @@ import (
 	"github.com/ryo-watanabe/k8s-volume-snap/pkg/utils"
 )
 
-// k8s api errors not to retry
-var apiPermErrors = []string{
-	"Unauthorized",
-}
-func apiPermError(error string) bool {
-	for _, e := range apiPermErrors {
-		if strings.Contains(error, e) {
-			return true
-		}
-	}
-	return false
-}
-
-// Object store errors not to retry
-var obstPermErrors = []string{
-	"SignatureDoesNotMatch",
-	"InvalidAccessKeyId",
-	"NoSuchBucket",
-}
-func objectstorePermError(error string) bool {
-	for _, e := range obstPermErrors {
-		if strings.Contains(error, e) {
-			return true
-		}
-	}
-	return false
-}
-
 // Snapshot k8s volumes
 func Snapshot(
 	snapshot *vsv1alpha1.VolumeSnapshot,

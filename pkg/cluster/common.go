@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"fmt"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -19,6 +20,9 @@ type Cluster interface {
 		localKubeClient kubernetes.Interface) error
 	Restore(restore *vsv1alpha1.VolumeRestore,
 		snapshot *vsv1alpha1.VolumeSnapshot,
+		bucket objectstore.Objectstore,
+		localKubeClient kubernetes.Interface) error
+	DeleteSnapshot(snapshot *vsv1alpha1.VolumeSnapshot,
 		bucket objectstore.Objectstore,
 		localKubeClient kubernetes.Interface) error
 }
@@ -49,6 +53,15 @@ func (c *Cmd) Restore(
 	localKubeClient kubernetes.Interface) error {
 
 	return Restore(restore, snapshot, bucket, localKubeClient)
+}
+
+// DeleteSnapshot deletes a volume snapshot
+func (c *Cmd) DeleteSnapshot(
+	snapshot *vsv1alpha1.VolumeSnapshot,
+	bucket objectstore.Objectstore,
+	localKubeClient kubernetes.Interface) error {
+
+	return DeleteSnapshot(snapshot, bucket, localKubeClient)
 }
 
 // Setup Kubernetes client for target cluster.
@@ -96,4 +109,32 @@ func getNamespaceUID(name string, kubeClient kubernetes.Interface) (string, erro
 		return "", fmt.Errorf("Error getting namespace UID : %s", err.Error())
 	}
 	return string(ns.ObjectMeta.GetUID()), nil
+}
+
+// k8s api errors not to retry
+var apiPermErrors = []string{
+	"Unauthorized",
+}
+func apiPermError(error string) bool {
+	for _, e := range apiPermErrors {
+		if strings.Contains(error, e) {
+			return true
+		}
+	}
+	return false
+}
+
+// Object store errors not to retry
+var obstPermErrors = []string{
+	"SignatureDoesNotMatch",
+	"InvalidAccessKeyId",
+	"NoSuchBucket",
+}
+func objectstorePermError(error string) bool {
+	for _, e := range obstPermErrors {
+		if strings.Contains(error, e) {
+			return true
+		}
+	}
+	return false
 }
