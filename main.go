@@ -61,23 +61,23 @@ func main() {
 	if kubeconfig == "" {
 		cfg, err = rest.InClusterConfig()
 		if err != nil {
-			klog.Fatalf("Error building kubeconfig in cluster: %s", err.Error())
+			klog.Exitf("Error building kubeconfig in cluster: %s", err.Error())
 		}
 	} else {
 		cfg, err = clientcmd.BuildConfigFromFlags(masterURL, kubeconfig)
 		if err != nil {
-			klog.Fatalf("Error building kubeconfig out of cluster: %s", err.Error())
+			klog.Exitf("Error building kubeconfig out of cluster: %s", err.Error())
 		}
 	}
 
 	kubeClient, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
-		klog.Fatalf("Error building kubernetes clientset: %s", err.Error())
+		klog.Exitf("Error building kubernetes clientset: %s", err.Error())
 	}
 
 	vsClient, err := clientset.NewForConfig(cfg)
 	if err != nil {
-		klog.Fatalf("Error building volumesnapshot clientset: %s", err.Error())
+		klog.Exitf("Error building volumesnapshot clientset: %s", err.Error())
 	}
 
 	vsInformerFactory := informers.NewSharedInformerFactory(vsClient, time.Second*30)
@@ -96,7 +96,7 @@ func main() {
 	vsInformerFactory.Start(stopCh)
 
 	if err = controller.Run(snapshotthreads, restorethreads, stopCh); err != nil {
-		klog.Fatalf("Error running controller: %s", err.Error())
+		klog.Exitf("Error running controller: %s", err.Error())
 	}
 }
 

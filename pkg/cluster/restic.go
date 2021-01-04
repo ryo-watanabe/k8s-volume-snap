@@ -193,6 +193,11 @@ func (r *Restic) resticJobBackup(volumeId, hostPath, nodeName string) *batchv1.J
 	job.Spec.Template.Spec.NodeSelector = map[string]string{
 		"kubernetes.io/hostname": nodeName,
 	}
+	// The wildcard toleration
+	job.Spec.Template.Spec.Tolerations = append(
+		job.Spec.Template.Spec.Tolerations,
+		corev1.Toleration{Operator: "Exists"},
+	)
 	// volumes
 	hpType := corev1.HostPathDirectory
 	volume := corev1.Volume{
@@ -328,9 +333,6 @@ func (r *Restic) resticJob(name, namespace string) *batchv1.Job {
 			},
 		)
 	}
-
-	// The wildcard toleration
-	job.Spec.Template.Spec.Tolerations = append(job.Spec.Template.Spec.Tolerations, corev1.Toleration{Operator: "Exists"})
 
 	return job
 }

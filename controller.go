@@ -149,7 +149,7 @@ func (c *Controller) Run(snapshotthreads, restorethreads int, stopCh <-chan stru
 	klog.Info("Checking namespace")
 	_, err := c.kubeclientset.CoreV1().Namespaces().Get(c.namespace, metav1.GetOptions{})
 	if err != nil {
-		klog.Fatalf("Namespace %s not exist", c.namespace)
+		klog.Exitf("Namespace %s not exist", c.namespace)
 	}
 
 	// TO DO : Check CRDs are existing here.
@@ -158,35 +158,35 @@ func (c *Controller) Run(snapshotthreads, restorethreads int, stopCh <-chan stru
 	klog.Info("Checking objectstore buckets")
 	osConfigs, err := c.vsclientset.VolumesnapshotV1alpha1().ObjectstoreConfigs(c.namespace).List(metav1.ListOptions{})
 	if err != nil {
-		klog.Fatalf("List Objectstore Config error : %s", err.Error())
+		klog.Exitf("List Objectstore Config error : %s", err.Error())
 	}
 	for _, os := range osConfigs.Items {
 
 		bucket, err := c.getBucket(c.namespace, os.ObjectMeta.Name, c.kubeclientset, c.vsclientset, c.insecure)
 		if err != nil {
-			klog.Fatalf("Get bucket error for ObjectstoreConfig %s * %s", os.ObjectMeta.Name, err.Error())
+			klog.Exitf("Get bucket error for ObjectstoreConfig %s * %s", os.ObjectMeta.Name, err.Error())
 		}
 		klog.Infof("- Objectstore Config name:%s endpoint:%s bucket:%s", bucket.GetName(), bucket.GetEndpoint(), bucket.GetBucketName())
 
 		found, err := bucket.ChkBucket()
 		if err != nil {
-			klog.Fatalf("Check bucket error : %s", err.Error())
+			klog.Exitf("Check bucket error : %s", err.Error())
 		}
 		if !found {
 			if c.createbucket {
 				klog.Infof("Creating bucket %s", bucket.GetBucketName())
 				err = bucket.CreateBucket()
 				if err != nil {
-					klog.Fatalf("Create bucket error : %s", err.Error())
+					klog.Exitf("Create bucket error : %s", err.Error())
 				}
 			} else {
-				klog.Fatalf("Bucket %s not found", bucket.GetBucketName())
+				klog.Exitf("Bucket %s not found", bucket.GetBucketName())
 			}
 		}
 
 		objList, err := bucket.ListObjectInfo()
 		if err != nil {
-			klog.Fatalf("List objects error : %s", err.Error())
+			klog.Exitf("List objects error : %s", err.Error())
 		}
 		klog.Infof("-- Objects in bucket %s:", bucket.GetBucketName())
 		for _, obj := range objList {

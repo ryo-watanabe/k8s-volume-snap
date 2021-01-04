@@ -82,7 +82,7 @@ spec:
   - name: FAILED
     type: integer
     description: Number of restore failed volumes.
-    JSONPath: .status.NumFailedVolumeClaims
+    JSONPath: .status.numFailed
   - name: STATUS
     type: string
     description: Status of snapshot.
