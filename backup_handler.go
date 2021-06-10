@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -70,7 +71,7 @@ func retryNotify(err error, wait time.Duration) {
 // with the current status of the resource.
 func (c *Controller) snapshotSyncHandler(key string, queueonly bool) error {
 
-	//getOptions := metav1.GetOptions{IncludeUninitialized: false}
+	ctx := context.TODO()
 
 	// Convert the namespace/name string into a distinct namespace and name
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
@@ -97,7 +98,7 @@ func (c *Controller) snapshotSyncHandler(key string, queueonly bool) error {
 		retryend := metav1.NewTime(snapshot.ObjectMeta.CreationTimestamp.Add(time.Duration(c.maxretryelapsedsec+1) * time.Second))
 		nowTime := metav1.NewTime(time.Now())
 		if retryend.Before(&nowTime) {
-			snapshot, err = c.updateSnapshotStatus(snapshot, "Failed", "Controller stopped while taking the snapshot")
+			snapshot, err = c.updateSnapshotStatus(ctx, snapshot, "Failed", "Controller stopped while taking the snapshot")
 			if err != nil {
 				return err
 			}
@@ -106,7 +107,7 @@ func (c *Controller) snapshotSyncHandler(key string, queueonly bool) error {
 
 	// do snapshot
 	if !queueonly && snapshot.Status.Phase == "InQueue" {
-		snapshot, err = c.updateSnapshotStatus(snapshot, "InProgress", "")
+		snapshot, err = c.updateSnapshotStatus(ctx, snapshot, "InProgress", "")
 		if err != nil {
 			return err
 		}
@@ -114,7 +115,7 @@ func (c *Controller) snapshotSyncHandler(key string, queueonly bool) error {
 		// bucket
 		bucket, err := c.getBucket(c.namespace, snapshot.Spec.ObjectstoreConfig, c.kubeclientset, c.vsclientset, c.insecure)
 		if err != nil {
-			snapshot, err = c.updateSnapshotStatus(snapshot, "Failed", err.Error())
+			snapshot, err = c.updateSnapshotStatus(ctx, snapshot, "Failed", err.Error())
 			if err != nil {
 				return err
 			}
@@ -133,14 +134,14 @@ func (c *Controller) snapshotSyncHandler(key string, queueonly bool) error {
 		}
 		err = backoff.RetryNotify(operationSnapshot, b, retryNotify)
 		if err != nil {
-			snapshot, err = c.updateSnapshotStatus(snapshot, "Failed", err.Error())
+			snapshot, err = c.updateSnapshotStatus(ctx, snapshot, "Failed", err.Error())
 			if err != nil {
 				return err
 			}
 			return nil
 		}
 
-		snapshot, err = c.updateSnapshotStatus(snapshot, "Completed", "")
+		snapshot, err = c.updateSnapshotStatus(ctx, snapshot, "Completed", "")
 		if err != nil {
 			return err
 		}
@@ -148,7 +149,7 @@ func (c *Controller) snapshotSyncHandler(key string, queueonly bool) error {
 
 	// initialize
 	if snapshot.Status.Phase == "" {
-		snapshot, err = c.updateSnapshotStatus(snapshot, "InQueue", "")
+		snapshot, err = c.updateSnapshotStatus(ctx, snapshot, "InQueue", "")
 		if err != nil {
 			return err
 		}
@@ -158,12 +159,12 @@ func (c *Controller) snapshotSyncHandler(key string, queueonly bool) error {
 	return nil
 }
 
-func (c *Controller) updateSnapshotStatus(snapshot *vsv1alpha1.VolumeSnapshot, phase, reason string) (*vsv1alpha1.VolumeSnapshot, error) {
+func (c *Controller) updateSnapshotStatus(ctx context.Context, snapshot *vsv1alpha1.VolumeSnapshot, phase, reason string) (*vsv1alpha1.VolumeSnapshot, error) {
 	snapshotCopy := snapshot.DeepCopy()
 	snapshotCopy.Status.Phase = phase
 	snapshotCopy.Status.Reason = reason
 	klog.Infof("snapshot:%s status %s => %s : %s", snapshot.ObjectMeta.Name, snapshot.Status.Phase, phase, reason)
-	snapshot, err := c.vsclientset.VolumesnapshotV1alpha1().VolumeSnapshots(snapshot.Namespace).Update(snapshotCopy)
+	snapshot, err := c.vsclientset.VolumesnapshotV1alpha1().VolumeSnapshots(snapshot.Namespace).Update(ctx, snapshotCopy, metav1.UpdateOptions{})
 	if err != nil {
 		return snapshot, fmt.Errorf("Failed to update snapshot status for %s : %s", snapshot.ObjectMeta.Name, err.Error())
 	}
@@ -221,7 +222,7 @@ func (c *Controller) deleteSnapshot(obj interface{}) {
 		snapshot.Status.Reason = err.Error()
 		snapshot.ObjectMeta.SetResourceVersion("")
 		snapshot.ObjectMeta.SetUID("")
-		_, err := c.vsclientset.VolumesnapshotV1alpha1().VolumeSnapshots(snapshot.Namespace).Create(snapshot)
+		_, err := c.vsclientset.VolumesnapshotV1alpha1().VolumeSnapshots(snapshot.Namespace).Create(context.TODO(), snapshot, metav1.CreateOptions{})
 		if err != nil {
 			runtime.HandleError(
 				fmt.Errorf("Failed to create snapshot with status DeleteFailed : %s", err.Error()),

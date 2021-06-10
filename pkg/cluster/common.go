@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -56,8 +57,8 @@ func buildKubeClient(kubeconfig string) (*kubernetes.Clientset, error) {
 }
 
 // Get namespace UID
-func getNamespaceUID(name string, kubeClient kubernetes.Interface) (string, error) {
-	ns, err := kubeClient.CoreV1().Namespaces().Get(name, metav1.GetOptions{})
+func getNamespaceUID(ctx context.Context, name string, kubeClient kubernetes.Interface) (string, error) {
+	ns, err := kubeClient.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return "", fmt.Errorf("Error getting namespace UID : %s", err.Error())
 	}

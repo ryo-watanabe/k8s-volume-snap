@@ -19,6 +19,8 @@ limitations under the License.
 package fake
 
 import (
+	"context"
+
 	v1alpha1 "github.com/ryo-watanabe/k8s-volume-snap/pkg/apis/volumesnapshot/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -39,7 +41,7 @@ var objectstoreconfigsResource = schema.GroupVersionResource{Group: "volumesnaps
 var objectstoreconfigsKind = schema.GroupVersionKind{Group: "volumesnapshot.rywt.io", Version: "v1alpha1", Kind: "ObjectstoreConfig"}
 
 // Get takes name of the objectstoreConfig, and returns the corresponding objectstoreConfig object, and an error if there is any.
-func (c *FakeObjectstoreConfigs) Get(name string, options v1.GetOptions) (result *v1alpha1.ObjectstoreConfig, err error) {
+func (c *FakeObjectstoreConfigs) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ObjectstoreConfig, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewGetAction(objectstoreconfigsResource, c.ns, name), &v1alpha1.ObjectstoreConfig{})
 
@@ -50,7 +52,7 @@ func (c *FakeObjectstoreConfigs) Get(name string, options v1.GetOptions) (result
 }
 
 // List takes label and field selectors, and returns the list of ObjectstoreConfigs that match those selectors.
-func (c *FakeObjectstoreConfigs) List(opts v1.ListOptions) (result *v1alpha1.ObjectstoreConfigList, err error) {
+func (c *FakeObjectstoreConfigs) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.ObjectstoreConfigList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewListAction(objectstoreconfigsResource, objectstoreconfigsKind, c.ns, opts), &v1alpha1.ObjectstoreConfigList{})
 
@@ -72,14 +74,14 @@ func (c *FakeObjectstoreConfigs) List(opts v1.ListOptions) (result *v1alpha1.Obj
 }
 
 // Watch returns a watch.Interface that watches the requested objectstoreConfigs.
-func (c *FakeObjectstoreConfigs) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeObjectstoreConfigs) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewWatchAction(objectstoreconfigsResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a objectstoreConfig and creates it.  Returns the server's representation of the objectstoreConfig, and an error, if there is any.
-func (c *FakeObjectstoreConfigs) Create(objectstoreConfig *v1alpha1.ObjectstoreConfig) (result *v1alpha1.ObjectstoreConfig, err error) {
+func (c *FakeObjectstoreConfigs) Create(ctx context.Context, objectstoreConfig *v1alpha1.ObjectstoreConfig, opts v1.CreateOptions) (result *v1alpha1.ObjectstoreConfig, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewCreateAction(objectstoreconfigsResource, c.ns, objectstoreConfig), &v1alpha1.ObjectstoreConfig{})
 
@@ -90,7 +92,7 @@ func (c *FakeObjectstoreConfigs) Create(objectstoreConfig *v1alpha1.ObjectstoreC
 }
 
 // Update takes the representation of a objectstoreConfig and updates it. Returns the server's representation of the objectstoreConfig, and an error, if there is any.
-func (c *FakeObjectstoreConfigs) Update(objectstoreConfig *v1alpha1.ObjectstoreConfig) (result *v1alpha1.ObjectstoreConfig, err error) {
+func (c *FakeObjectstoreConfigs) Update(ctx context.Context, objectstoreConfig *v1alpha1.ObjectstoreConfig, opts v1.UpdateOptions) (result *v1alpha1.ObjectstoreConfig, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateAction(objectstoreconfigsResource, c.ns, objectstoreConfig), &v1alpha1.ObjectstoreConfig{})
 
@@ -101,7 +103,7 @@ func (c *FakeObjectstoreConfigs) Update(objectstoreConfig *v1alpha1.ObjectstoreC
 }
 
 // Delete takes name of the objectstoreConfig and deletes it. Returns an error if one occurs.
-func (c *FakeObjectstoreConfigs) Delete(name string, options *v1.DeleteOptions) error {
+func (c *FakeObjectstoreConfigs) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
 		Invokes(testing.NewDeleteAction(objectstoreconfigsResource, c.ns, name), &v1alpha1.ObjectstoreConfig{})
 
@@ -109,15 +111,15 @@ func (c *FakeObjectstoreConfigs) Delete(name string, options *v1.DeleteOptions) 
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeObjectstoreConfigs) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(objectstoreconfigsResource, c.ns, listOptions)
+func (c *FakeObjectstoreConfigs) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+	action := testing.NewDeleteCollectionAction(objectstoreconfigsResource, c.ns, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.ObjectstoreConfigList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched objectstoreConfig.
-func (c *FakeObjectstoreConfigs) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.ObjectstoreConfig, err error) {
+func (c *FakeObjectstoreConfigs) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ObjectstoreConfig, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(objectstoreconfigsResource, c.ns, name, pt, data, subresources...), &v1alpha1.ObjectstoreConfig{})
 

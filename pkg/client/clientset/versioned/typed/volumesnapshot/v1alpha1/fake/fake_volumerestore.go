@@ -19,6 +19,8 @@ limitations under the License.
 package fake
 
 import (
+	"context"
+
 	v1alpha1 "github.com/ryo-watanabe/k8s-volume-snap/pkg/apis/volumesnapshot/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
@@ -39,7 +41,7 @@ var volumerestoresResource = schema.GroupVersionResource{Group: "volumesnapshot.
 var volumerestoresKind = schema.GroupVersionKind{Group: "volumesnapshot.rywt.io", Version: "v1alpha1", Kind: "VolumeRestore"}
 
 // Get takes name of the volumeRestore, and returns the corresponding volumeRestore object, and an error if there is any.
-func (c *FakeVolumeRestores) Get(name string, options v1.GetOptions) (result *v1alpha1.VolumeRestore, err error) {
+func (c *FakeVolumeRestores) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.VolumeRestore, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewGetAction(volumerestoresResource, c.ns, name), &v1alpha1.VolumeRestore{})
 
@@ -50,7 +52,7 @@ func (c *FakeVolumeRestores) Get(name string, options v1.GetOptions) (result *v1
 }
 
 // List takes label and field selectors, and returns the list of VolumeRestores that match those selectors.
-func (c *FakeVolumeRestores) List(opts v1.ListOptions) (result *v1alpha1.VolumeRestoreList, err error) {
+func (c *FakeVolumeRestores) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.VolumeRestoreList, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewListAction(volumerestoresResource, volumerestoresKind, c.ns, opts), &v1alpha1.VolumeRestoreList{})
 
@@ -72,14 +74,14 @@ func (c *FakeVolumeRestores) List(opts v1.ListOptions) (result *v1alpha1.VolumeR
 }
 
 // Watch returns a watch.Interface that watches the requested volumeRestores.
-func (c *FakeVolumeRestores) Watch(opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeVolumeRestores) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewWatchAction(volumerestoresResource, c.ns, opts))
 
 }
 
 // Create takes the representation of a volumeRestore and creates it.  Returns the server's representation of the volumeRestore, and an error, if there is any.
-func (c *FakeVolumeRestores) Create(volumeRestore *v1alpha1.VolumeRestore) (result *v1alpha1.VolumeRestore, err error) {
+func (c *FakeVolumeRestores) Create(ctx context.Context, volumeRestore *v1alpha1.VolumeRestore, opts v1.CreateOptions) (result *v1alpha1.VolumeRestore, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewCreateAction(volumerestoresResource, c.ns, volumeRestore), &v1alpha1.VolumeRestore{})
 
@@ -90,7 +92,7 @@ func (c *FakeVolumeRestores) Create(volumeRestore *v1alpha1.VolumeRestore) (resu
 }
 
 // Update takes the representation of a volumeRestore and updates it. Returns the server's representation of the volumeRestore, and an error, if there is any.
-func (c *FakeVolumeRestores) Update(volumeRestore *v1alpha1.VolumeRestore) (result *v1alpha1.VolumeRestore, err error) {
+func (c *FakeVolumeRestores) Update(ctx context.Context, volumeRestore *v1alpha1.VolumeRestore, opts v1.UpdateOptions) (result *v1alpha1.VolumeRestore, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateAction(volumerestoresResource, c.ns, volumeRestore), &v1alpha1.VolumeRestore{})
 
@@ -102,7 +104,7 @@ func (c *FakeVolumeRestores) Update(volumeRestore *v1alpha1.VolumeRestore) (resu
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeVolumeRestores) UpdateStatus(volumeRestore *v1alpha1.VolumeRestore) (*v1alpha1.VolumeRestore, error) {
+func (c *FakeVolumeRestores) UpdateStatus(ctx context.Context, volumeRestore *v1alpha1.VolumeRestore, opts v1.UpdateOptions) (*v1alpha1.VolumeRestore, error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewUpdateSubresourceAction(volumerestoresResource, "status", c.ns, volumeRestore), &v1alpha1.VolumeRestore{})
 
@@ -113,7 +115,7 @@ func (c *FakeVolumeRestores) UpdateStatus(volumeRestore *v1alpha1.VolumeRestore)
 }
 
 // Delete takes name of the volumeRestore and deletes it. Returns an error if one occurs.
-func (c *FakeVolumeRestores) Delete(name string, options *v1.DeleteOptions) error {
+func (c *FakeVolumeRestores) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
 		Invokes(testing.NewDeleteAction(volumerestoresResource, c.ns, name), &v1alpha1.VolumeRestore{})
 
@@ -121,15 +123,15 @@ func (c *FakeVolumeRestores) Delete(name string, options *v1.DeleteOptions) erro
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeVolumeRestores) DeleteCollection(options *v1.DeleteOptions, listOptions v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(volumerestoresResource, c.ns, listOptions)
+func (c *FakeVolumeRestores) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+	action := testing.NewDeleteCollectionAction(volumerestoresResource, c.ns, listOpts)
 
 	_, err := c.Fake.Invokes(action, &v1alpha1.VolumeRestoreList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched volumeRestore.
-func (c *FakeVolumeRestores) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1alpha1.VolumeRestore, err error) {
+func (c *FakeVolumeRestores) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.VolumeRestore, err error) {
 	obj, err := c.Fake.
 		Invokes(testing.NewPatchSubresourceAction(volumerestoresResource, c.ns, name, pt, data, subresources...), &v1alpha1.VolumeRestore{})
 

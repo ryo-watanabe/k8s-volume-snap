@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -90,7 +91,7 @@ func retryNotifyRestic(err error, wait time.Duration) {
 }
 
 // DoResticJob executes restic Job with backing off
-func DoResticJob(job *batchv1.Job, kubeClient kubernetes.Interface, initInterval int) (string, error) {
+func DoResticJob(ctx context.Context, job *batchv1.Job, kubeClient kubernetes.Interface, initInterval int) (string, error) {
 
 	name := job.GetName()
 	namespace := job.GetNamespace()
@@ -99,18 +100,18 @@ func DoResticJob(job *batchv1.Job, kubeClient kubernetes.Interface, initInterval
 
 	// Create job
 	var dp metav1.DeletionPropagation = metav1.DeletePropagationForeground
-	_, err := kubeClient.BatchV1().Jobs(namespace).Create(job)
+	_, err := kubeClient.BatchV1().Jobs(namespace).Create(ctx, job, metav1.CreateOptions{})
 	if err != nil {
 		if !errors.IsAlreadyExists(err) {
 			return "", fmt.Errorf("Creating restic job error - %s", err.Error())
 		}
-		kubeClient.BatchV1().Jobs(namespace).Delete(name, &metav1.DeleteOptions{PropagationPolicy: &dp})
-		_, err = kubeClient.BatchV1().Jobs(namespace).Create(job)
+		kubeClient.BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{PropagationPolicy: &dp})
+		_, err = kubeClient.BatchV1().Jobs(namespace).Create(ctx, job, metav1.CreateOptions{})
 		if err != nil {
 			return "", fmt.Errorf("Re-creating restic job error - %s", err.Error())
 		}
 	}
-	defer kubeClient.BatchV1().Jobs(namespace).Delete(name, &metav1.DeleteOptions{PropagationPolicy: &dp})
+	defer kubeClient.BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{PropagationPolicy: &dp})
 
 	// wait for job completed with backoff retry
 	b := backoff.NewExponentialBackOff()
@@ -119,7 +120,7 @@ func DoResticJob(job *batchv1.Job, kubeClient kubernetes.Interface, initInterval
 	b.Multiplier = 2.0
 	b.InitialInterval = time.Duration(initInterval) * time.Second
 	chkJobCompleted := func() error {
-		chkJob, err := kubeClient.BatchV1().Jobs(namespace).Get(name, metav1.GetOptions{})
+		chkJob, err := kubeClient.BatchV1().Jobs(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			return backoff.Permanent(err)
 		}
@@ -138,7 +139,7 @@ func DoResticJob(job *batchv1.Job, kubeClient kubernetes.Interface, initInterval
 	}
 
 	// Get logs
-	podList, err := kubeClient.CoreV1().Pods(namespace).List(metav1.ListOptions{})
+	podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return "", fmt.Errorf("Listing job pods error - %s", err.Error())
 	}
@@ -146,7 +147,7 @@ func DoResticJob(job *batchv1.Job, kubeClient kubernetes.Interface, initInterval
 		refs := pod.ObjectMeta.GetOwnerReferences()
 		if len(refs) > 0 && refs[0].Name == name {
 			req := kubeClient.CoreV1().Pods(namespace).GetLogs(pod.Name, &corev1.PodLogOptions{})
-			podLogs, err := req.Stream()
+			podLogs, err := req.Stream(ctx)
 			if err != nil {
 				return "", fmt.Errorf("Logs request error - %s", err.Error())
 			}

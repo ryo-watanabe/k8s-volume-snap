@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
@@ -64,7 +65,7 @@ func (c *Controller) processNextRestoreItem(queueonly bool) bool {
 // with the current status of the resource.
 func (c *Controller) restoreSyncHandler(key string, queueonly bool) error {
 
-	//getOptions := metav1.GetOptions{IncludeUninitialized: false}
+	ctx := context.TODO()
 
 	// Convert the namespace/name string into a distinct namespace and name
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
@@ -86,23 +87,23 @@ func (c *Controller) restoreSyncHandler(key string, queueonly bool) error {
 	}
 
 	if !queueonly && restore.Status.Phase == "InQueue" {
-		restore, err = c.updateRestoreStatus(restore, "InProgress", "")
+		restore, err = c.updateRestoreStatus(ctx, restore, "InProgress", "")
 		if err != nil {
 			return err
 		}
 
 		// snapshot
 		snapshot, err := c.vsclientset.VolumesnapshotV1alpha1().VolumeSnapshots(c.namespace).Get(
-			restore.Spec.VolumeSnapshotName, metav1.GetOptions{})
+			ctx, restore.Spec.VolumeSnapshotName, metav1.GetOptions{})
 		if err != nil {
-			restore, err = c.updateRestoreStatus(restore, "Failed", err.Error())
+			restore, err = c.updateRestoreStatus(ctx, restore, "Failed", err.Error())
 			if err != nil {
 				return err
 			}
 			return nil
 		}
 		if snapshot.Status.Phase != "Completed" {
-			restore, err = c.updateRestoreStatus(restore, "Failed", "Snapshot data is not status 'Completed'")
+			restore, err = c.updateRestoreStatus(ctx, restore, "Failed", "Snapshot data is not status 'Completed'")
 			if err != nil {
 				return err
 			}
@@ -112,7 +113,7 @@ func (c *Controller) restoreSyncHandler(key string, queueonly bool) error {
 		// bucket
 		bucket, err := c.getBucket(c.namespace, snapshot.Spec.ObjectstoreConfig, c.kubeclientset, c.vsclientset, c.insecure)
 		if err != nil {
-			restore, err = c.updateRestoreStatus(restore, "Failed", err.Error())
+			restore, err = c.updateRestoreStatus(ctx, restore, "Failed", err.Error())
 			if err != nil {
 				return err
 			}
@@ -123,14 +124,14 @@ func (c *Controller) restoreSyncHandler(key string, queueonly bool) error {
 		// do restore
 		err = c.clusterCmd.Restore(restore, snapshot, bucket, c.kubeclientset)
 		if err != nil {
-			restore, err = c.updateRestoreStatus(restore, "Failed", err.Error())
+			restore, err = c.updateRestoreStatus(ctx, restore, "Failed", err.Error())
 			if err != nil {
 				return err
 			}
 			return nil
 		}
 
-		restore, err = c.updateRestoreStatus(restore, "Completed", "")
+		restore, err = c.updateRestoreStatus(ctx, restore, "Completed", "")
 		if err != nil {
 			return err
 		}
@@ -138,7 +139,7 @@ func (c *Controller) restoreSyncHandler(key string, queueonly bool) error {
 
 	// initialize
 	if restore.Status.Phase == "" {
-		restore, err = c.updateRestoreStatus(restore, "InQueue", "")
+		restore, err = c.updateRestoreStatus(ctx, restore, "InQueue", "")
 		if err != nil {
 			return err
 		}
@@ -148,12 +149,12 @@ func (c *Controller) restoreSyncHandler(key string, queueonly bool) error {
 	return nil
 }
 
-func (c *Controller) updateRestoreStatus(restore *vsv1alpha1.VolumeRestore, phase, reason string) (*vsv1alpha1.VolumeRestore, error) {
+func (c *Controller) updateRestoreStatus(ctx context.Context, restore *vsv1alpha1.VolumeRestore, phase, reason string) (*vsv1alpha1.VolumeRestore, error) {
 	restoreCopy := restore.DeepCopy()
 	restoreCopy.Status.Phase = phase
 	restoreCopy.Status.Reason = reason
 	klog.Infof("restore:%s status %s => %s : %s", restore.ObjectMeta.Name, restore.Status.Phase, phase, reason)
-	restore, err := c.vsclientset.VolumesnapshotV1alpha1().VolumeRestores(restore.Namespace).Update(restoreCopy)
+	restore, err := c.vsclientset.VolumesnapshotV1alpha1().VolumeRestores(restore.Namespace).Update(ctx, restoreCopy, metav1.UpdateOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("Failed to update restore status for " + restore.ObjectMeta.Name + " : " + err.Error())
 	}

@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"context"
 	"fmt"
 	"encoding/json"
 	"time"
@@ -40,11 +41,12 @@ func restoreResources(
 	kubeClient kubernetes.Interface,
 	localKubeClient kubernetes.Interface) error {
 
+	ctx := context.TODO()
 	// Restore log
 	rlog := utils.NewNamedLog("restore:" + restore.ObjectMeta.Name)
 
 	// get clusterId (= UID of kube-system namespace)
-	restoreClusterId, err := getNamespaceUID("kube-system", kubeClient)
+	restoreClusterId, err := getNamespaceUID(ctx, "kube-system", kubeClient)
 	if err != nil {
 
 		// This is the first time that k8s api of target cluster accessed
@@ -74,7 +76,7 @@ func restoreResources(
 
 	// get snapshot list
 	chkJob := adminRestic.resticJobListSnapshots()
-	output, err := DoResticJob(chkJob, localKubeClient, 5)
+	output, err := DoResticJob(ctx, chkJob, localKubeClient, 5)
 	if err != nil {
 		return fmt.Errorf("List snapshots failed : %s", err.Error())
 	}
@@ -109,7 +111,7 @@ func restoreResources(
 		}
 
 		// check namespace exists
-		_, err := kubeClient.CoreV1().Namespaces().Get(snapPvc.Namespace, metav1.GetOptions{})
+		_, err := kubeClient.CoreV1().Namespaces().Get(ctx, snapPvc.Namespace, metav1.GetOptions{})
 		if err != nil {
 			// create namespace if not exist
 			if errors.IsNotFound(err) {
@@ -119,7 +121,7 @@ func restoreResources(
 						Name: snapPvc.Namespace,
 					},
 				}
-				_, err = kubeClient.CoreV1().Namespaces().Create(newNs)
+				_, err = kubeClient.CoreV1().Namespaces().Create(ctx, newNs, metav1.CreateOptions{})
 				if err != nil {
 					return fmt.Errorf("Creating namespace failed : %s", err.Error())
 				}
@@ -137,7 +139,7 @@ func restoreResources(
 			Spec: snapPvc.ClaimSpec,
 		}
 		newPvc.Spec.VolumeName = ""
-		_, err = kubeClient.CoreV1().PersistentVolumeClaims(snapPvc.Namespace).Create(newPvc)
+		_, err = kubeClient.CoreV1().PersistentVolumeClaims(snapPvc.Namespace).Create(ctx, newPvc, metav1.CreateOptions{})
 		if err != nil {
 			volumeRestoreFailedWith(
 				fmt.Errorf("Creating PVC failed : %s", err.Error()),
@@ -152,7 +154,7 @@ func restoreResources(
 		b.Multiplier = 2.0
 		b.InitialInterval = time.Duration(5) * time.Second
 		chkPvcBound := func() error {
-			chkPvc, err := kubeClient.CoreV1().PersistentVolumeClaims(snapPvc.Namespace).Get(snapPvc.Name, metav1.GetOptions{})
+			chkPvc, err := kubeClient.CoreV1().PersistentVolumeClaims(snapPvc.Namespace).Get(ctx, snapPvc.Name, metav1.GetOptions{})
 			if err != nil {
 				return backoff.Permanent(err)
 			}
@@ -173,7 +175,7 @@ func restoreResources(
 
 		// restic restore job
 		restoreJob := r.resticJobRestore(snapPvc.SnapshotId, snap.GetSourceVolumeId(), snapPvc.Name, snapPvc.Namespace)
-		output, err = DoResticJob(restoreJob, kubeClient, 30)
+		output, err = DoResticJob(ctx, restoreJob, kubeClient, 30)
 		if err != nil {
 			volumeRestoreFailedWith(
 				fmt.Errorf("Error running restore snapshot job : %s : %s", err.Error(), output),

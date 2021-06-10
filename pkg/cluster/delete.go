@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"context"
 	"fmt"
 	"encoding/json"
 
@@ -25,6 +26,7 @@ func deleteVolumeSnapshots(
 	bucket objectstore.Objectstore,
 	localKubeClient kubernetes.Interface) error {
 
+	ctx := context.TODO()
 	// Delete log
 	dlog := utils.NewNamedLog("delete:" + snapshot.ObjectMeta.Name)
 
@@ -41,7 +43,7 @@ func deleteVolumeSnapshots(
 
 	// get snapshot list
 	chkJob := adminRestic.resticJobListSnapshots()
-	output, err := DoResticJob(chkJob, localKubeClient, 5)
+	output, err := DoResticJob(ctx, chkJob, localKubeClient, 5)
 	if err != nil {
 		return fmt.Errorf("List snapshots failed : %s", err.Error())
 	}
@@ -74,7 +76,7 @@ func deleteVolumeSnapshots(
 		// restic delete job
 		dlog.Infof(" -- Deleting snapshot id:%s from repository", snapPvc.SnapshotId)
 		deleteJob := adminRestic.resticJobDelete(snapPvc.SnapshotId)
-		output, err = DoResticJob(deleteJob, localKubeClient, 10)
+		output, err = DoResticJob(ctx, deleteJob, localKubeClient, 10)
 		if err != nil {
 			return fmt.Errorf("Error running delete snapshot job : %s : %s", err.Error(), output)
 		}

@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -145,8 +146,9 @@ func (c *Controller) Run(snapshotthreads, restorethreads int, stopCh <-chan stru
 	defer c.snapshotQueue.ShutDown()
 	defer c.restoreQueue.ShutDown()
 
+	ctx := context.TODO()
 	klog.Info("Checking namespace")
-	_, err := c.kubeclientset.CoreV1().Namespaces().Get(c.namespace, metav1.GetOptions{})
+	_, err := c.kubeclientset.CoreV1().Namespaces().Get(ctx, c.namespace, metav1.GetOptions{})
 	if err != nil {
 		klog.Exitf("Namespace %s not exist", c.namespace)
 	}
@@ -155,7 +157,7 @@ func (c *Controller) Run(snapshotthreads, restorethreads int, stopCh <-chan stru
 	//klog.Info("Checking CRDs")
 
 	klog.Info("Checking objectstore buckets")
-	osConfigs, err := c.vsclientset.VolumesnapshotV1alpha1().ObjectstoreConfigs(c.namespace).List(metav1.ListOptions{})
+	osConfigs, err := c.vsclientset.VolumesnapshotV1alpha1().ObjectstoreConfigs(c.namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		klog.Exitf("List Objectstore Config error : %s", err.Error())
 	}
@@ -221,16 +223,18 @@ func (c *Controller) Run(snapshotthreads, restorethreads int, stopCh <-chan stru
 }
 
 func getBucketFunc(namespace, objectstoreConfig string, kubeclient kubernetes.Interface, client clientset.Interface, insecure bool) (objectstore.Objectstore, error) {
+
+	ctx := context.TODO()
 	// bucket
 	osConfig, err := client.VolumesnapshotV1alpha1().ObjectstoreConfigs(namespace).Get(
-		objectstoreConfig, metav1.GetOptions{})
+		ctx, objectstoreConfig, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
 
 	// cloud credentials secret
 	cred, err := kubeclient.CoreV1().Secrets(namespace).Get(
-		osConfig.Spec.CloudCredentialSecret, metav1.GetOptions{})
+		ctx, osConfig.Spec.CloudCredentialSecret, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}

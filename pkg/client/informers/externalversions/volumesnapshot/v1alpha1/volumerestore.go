@@ -19,6 +19,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	time "time"
 
 	volumesnapshotv1alpha1 "github.com/ryo-watanabe/k8s-volume-snap/pkg/apis/volumesnapshot/v1alpha1"
@@ -61,13 +62,13 @@ func NewFilteredVolumeRestoreInformer(client versioned.Interface, namespace stri
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.VolumesnapshotV1alpha1().VolumeRestores(namespace).List(options)
+				return client.VolumesnapshotV1alpha1().VolumeRestores(namespace).List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.VolumesnapshotV1alpha1().VolumeRestores(namespace).Watch(options)
+				return client.VolumesnapshotV1alpha1().VolumeRestores(namespace).Watch(context.TODO(), options)
 			},
 		},
 		&volumesnapshotv1alpha1.VolumeRestore{},

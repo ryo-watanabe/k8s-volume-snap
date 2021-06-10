@@ -3,6 +3,7 @@ package cluster
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -40,11 +41,12 @@ func snapshotVolumes(
 	bucket objectstore.Objectstore,
 	kubeClient, localKubeClient kubernetes.Interface) error {
 
+	ctx := context.TODO()
 	// Snapshot log
 	blog := utils.NewNamedLog("snapshot:" + snapshot.ObjectMeta.Name)
 
 	// get clusterId (= UID of kube-system namespace)
-	clusterId, err := getNamespaceUID("kube-system", kubeClient)
+	clusterId, err := getNamespaceUID(ctx, "kube-system", kubeClient)
 	if err != nil {
 		// This is the first time that k8s api of target cluster accessed
 		if apiPermError(err.Error()) {
@@ -77,12 +79,12 @@ func snapshotVolumes(
 
 	// check repository
 	chkJob := adminRestic.resticJobListSnapshots()
-	_, err = DoResticJob(chkJob, localKubeClient, 5)
+	_, err = DoResticJob(ctx, chkJob, localKubeClient, 5)
 	if err != nil {
 		if strings.Contains(err.Error(), "specified key does not exist") {
 			// first snapshot for the cluster, create repository
 			initJob := adminRestic.resticJobInit()
-			_, err = DoResticJob(initJob, localKubeClient, 5)
+			_, err = DoResticJob(ctx, initJob, localKubeClient, 5)
 			if err != nil {
 				return fmt.Errorf("Initializing repository failed : %s", err.Error())
 			}
@@ -92,7 +94,7 @@ func snapshotVolumes(
 	}
 
 	// Get PVCs list
-	pvcs, err := kubeClient.CoreV1().PersistentVolumeClaims("").List(metav1.ListOptions{})
+	pvcs, err := kubeClient.CoreV1().PersistentVolumeClaims("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("Error getting PVC list : %s", err.Error())
 	}
@@ -118,7 +120,7 @@ func snapshotVolumes(
 		}
 
 		// get pv
-		pv, err := kubeClient.CoreV1().PersistentVolumes().Get(pvc.Spec.VolumeName, metav1.GetOptions{})
+		pv, err := kubeClient.CoreV1().PersistentVolumes().Get(ctx, pvc.Spec.VolumeName, metav1.GetOptions{})
 		if err != nil {
 			snapshot.Status.SkippedClaims++
 			blog.Infof("  Skipping - Error getting PV : %s", err.Error())
@@ -126,7 +128,7 @@ func snapshotVolumes(
 		}
 
 		// get mounted node
-		nodeName, err := getPVCMountedNode(&pvc, kubeClient)
+		nodeName, err := getPVCMountedNode(ctx, &pvc, kubeClient)
 		if err != nil {
 			snapshot.Status.SkippedClaims++
 			blog.Infof("  Skipping - PV not in use : %s", err.Error())
@@ -136,7 +138,7 @@ func snapshotVolumes(
 
 		// Glob volume path
 		globJob := r.globberJob(pvc.Spec.VolumeName, nodeName)
-		volumePath, err := DoResticJob(globJob, kubeClient, 5)
+		volumePath, err := DoResticJob(ctx, globJob, kubeClient, 5)
 		if err != nil {
 			snapshot.Status.SkippedClaims++
 			blog.Infof("  Skipping - Error globbing volume path : %s", err.Error())
@@ -156,7 +158,7 @@ func snapshotVolumes(
 			volumePath = volumePath + "/mount"
 		}
 		snapJob := r.resticJobBackup(pvc.Spec.VolumeName, volumePath, nodeName)
-		output, err := DoResticJob(snapJob, kubeClient, 30)
+		output, err := DoResticJob(ctx, snapJob, kubeClient, 30)
 		if err != nil {
 			blog.Warningf("!! Error taking snapshot PVC %s : %s", pvc.GetName(), err.Error())
 		} else {
@@ -252,11 +254,12 @@ func snapshotVolumes(
 }
 
 func getPVCMountedNode(
+	ctx context.Context,
 	pvc *corev1.PersistentVolumeClaim,
 	kubeClient kubernetes.Interface) (string, error) {
 
 	// check volume attachment
-	attaches, err := kubeClient.StorageV1().VolumeAttachments().List(metav1.ListOptions{})
+	attaches, err := kubeClient.StorageV1().VolumeAttachments().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return "", fmt.Errorf("Error getting volumeattachments : %s", err.Error())
 	}
@@ -269,7 +272,7 @@ func getPVCMountedNode(
 	}
 
 	// Check mounts not informed in volumeattachments
-	pods, err := kubeClient.CoreV1().Pods(pvc.GetNamespace()).List(metav1.ListOptions{})
+	pods, err := kubeClient.CoreV1().Pods(pvc.GetNamespace()).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return "", fmt.Errorf("Error getting pods : %s", err.Error())
 	}

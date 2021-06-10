@@ -26,8 +26,10 @@ import (
 )
 
 // ObjectstoreConfigLister helps list ObjectstoreConfigs.
+// All objects returned here must be treated as read-only.
 type ObjectstoreConfigLister interface {
 	// List lists all ObjectstoreConfigs in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.ObjectstoreConfig, err error)
 	// ObjectstoreConfigs returns an object that can list and get ObjectstoreConfigs.
 	ObjectstoreConfigs(namespace string) ObjectstoreConfigNamespaceLister
@@ -58,10 +60,13 @@ func (s *objectstoreConfigLister) ObjectstoreConfigs(namespace string) Objectsto
 }
 
 // ObjectstoreConfigNamespaceLister helps list and get ObjectstoreConfigs.
+// All objects returned here must be treated as read-only.
 type ObjectstoreConfigNamespaceLister interface {
 	// List lists all ObjectstoreConfigs in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.ObjectstoreConfig, err error)
 	// Get retrieves the ObjectstoreConfig from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.ObjectstoreConfig, error)
 	ObjectstoreConfigNamespaceListerExpansion
 }
