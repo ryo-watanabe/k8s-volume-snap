@@ -174,10 +174,6 @@ func (c *Controller) updateSnapshotStatus(snapshot *vsv1alpha1.VolumeSnapshot, p
 // string which is then put onto the work queue. This method should *not* be
 // passed resources of any type other than Snapshot.
 func (c *Controller) enqueueSnapshot(obj interface{}) {
-	var key string
-	var err error
-	//klog.Info("snapshot enqueued : %#v", obj)
-
 	// queue only snapshots in our namespace
 	meta, err := meta.Accessor(obj)
 	if err != nil {
@@ -188,10 +184,7 @@ func (c *Controller) enqueueSnapshot(obj interface{}) {
 		return
 	}
 
-	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
-		runtime.HandleError(err)
-		return
-	}
+	key, _ := cache.MetaNamespaceKeyFunc(obj)
 	c.snapshotQueue.AddRateLimited(key)
 }
 
@@ -228,10 +221,10 @@ func (c *Controller) deleteSnapshot(obj interface{}) {
 		snapshot.Status.Reason = err.Error()
 		snapshot.ObjectMeta.SetResourceVersion("")
 		snapshot.ObjectMeta.SetUID("")
-		snapshot, err := c.vsclientset.VolumesnapshotV1alpha1().VolumeSnapshots(snapshot.Namespace).Create(snapshot)
+		_, err := c.vsclientset.VolumesnapshotV1alpha1().VolumeSnapshots(snapshot.Namespace).Create(snapshot)
 		if err != nil {
 			runtime.HandleError(
-				fmt.Errorf("Failed to create snapshot with status DeleteFailed %s : %s", snapshot.ObjectMeta.Name, err.Error()),
+				fmt.Errorf("Failed to create snapshot with status DeleteFailed : %s", err.Error()),
 			)
 		}
 		return

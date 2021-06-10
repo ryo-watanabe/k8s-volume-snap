@@ -66,7 +66,7 @@ type Controller struct {
 	namespace string
 	labels    map[string]string
 
-	clusterCmd cluster.Cluster
+	clusterCmd cluster.Interface
 	getBucket  func(namespace, objectstoreConfig string, kubeclient kubernetes.Interface, client clientset.Interface, insecure bool) (objectstore.Objectstore, error)
 }
 
@@ -79,8 +79,7 @@ func NewController(
 	namespace string,
 	insecure, createbucket bool,
 	maxretryelapsedsec int,
-	clusterCmd cluster.Cluster) *Controller {
-	//bucket *objectstore.Bucket) *Controller {
+	clusterCmd cluster.Interface) *Controller {
 
 	// Create event broadcaster
 	// Add k8s-snapshot-controller types to the default Kubernetes Scheme so Events can be
