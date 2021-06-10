@@ -88,7 +88,7 @@ func main() {
 		namespace,
 		insecure, createbucket,
 		maxretryelapsedsec,
-		cluster.NewClusterCmd(),
+		cluster.NewCluster(),
 	)
 
 	// notice that there is no need to run Start methods in a separate goroutine. (i.e. go kubeInformerFactory.Start(stopCh)

@@ -18,7 +18,7 @@ import (
 )
 
 // Restore k8s resources
-func Restore(
+func (c *Cluster) Restore(
 	restore *vsv1alpha1.VolumeRestore,
 	snapshot *vsv1alpha1.VolumeSnapshot,
 	bucket objectstore.Objectstore,
@@ -103,7 +103,7 @@ func restoreResources(
 		}
 		if snap == nil {
 			volumeRestoreFailedWith(
-				fmt.Errorf("Snapshot %d not found", snapPvc.SnapshotId),
+				fmt.Errorf("Snapshot %s not found", snapPvc.SnapshotId),
 				restore, snapPvc.Name, snapPvc.Namespace, rlog)
 			continue
 		}

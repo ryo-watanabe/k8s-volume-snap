@@ -12,7 +12,7 @@ import (
 )
 
 // DeleteSnapshot deletes a volume snapshot
-func DeleteSnapshot(
+func (c *Cluster) DeleteSnapshot(
 	snapshot *vsv1alpha1.VolumeSnapshot,
 	bucket objectstore.Objectstore,
 	localKubeClient kubernetes.Interface) error {

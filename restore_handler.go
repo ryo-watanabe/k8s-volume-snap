@@ -21,10 +21,10 @@ func (c *Controller) runRestoreWorker() {
 	for c.processNextRestoreItem(false) {
 	}
 }
-func (c *Controller) runRestoreQueuer() {
-	for c.processNextRestoreItem(true) {
-	}
-}
+//func (c *Controller) runRestoreQueuer() {
+//	for c.processNextRestoreItem(true) {
+//	}
+//}
 
 // processNextWorkItem will read a single work item off the workqueue and
 // attempt to process it, by calling the syncHandler.
@@ -164,9 +164,6 @@ func (c *Controller) updateRestoreStatus(restore *vsv1alpha1.VolumeRestore, phas
 // string which is then put onto the work queue. This method should *not* be
 // passed resources of any type other than Restore.
 func (c *Controller) enqueueRestore(obj interface{}) {
-	var key string
-	var err error
-
 	// queue only restores in our namespace
 	meta, err := meta.Accessor(obj)
 	if err != nil {
@@ -177,9 +174,6 @@ func (c *Controller) enqueueRestore(obj interface{}) {
 		return
 	}
 
-	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
-		runtime.HandleError(err)
-		return
-	}
+	key, _ := cache.MetaNamespaceKeyFunc(obj)
 	c.restoreQueue.AddRateLimited(key)
 }

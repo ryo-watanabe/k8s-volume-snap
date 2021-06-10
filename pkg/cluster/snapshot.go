@@ -14,7 +14,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"github.com/cenkalti/backoff"
 	"k8s.io/client-go/kubernetes"
-	storagev1 "k8s.io/client-go/kubernetes/typed/storage/v1"
 
 	vsv1alpha1 "github.com/ryo-watanabe/k8s-volume-snap/pkg/apis/volumesnapshot/v1alpha1"
 	"github.com/ryo-watanabe/k8s-volume-snap/pkg/objectstore"
@@ -22,7 +21,7 @@ import (
 )
 
 // Snapshot k8s volumes
-func Snapshot(
+func (c *Cluster) Snapshot(
 	snapshot *vsv1alpha1.VolumeSnapshot,
 	bucket objectstore.Objectstore,
 	localKubeClient kubernetes.Interface) error {
@@ -32,19 +31,13 @@ func Snapshot(
 	if err != nil {
 		return err
 	}
-	// StorageV1Client for external cluster.
-	storageClient, err := buildStorageV1Client(snapshot.Spec.Kubeconfig)
-	if err != nil {
-		return err
-	}
 
-	return snapshotVolumes(snapshot, bucket, storageClient, kubeClient, localKubeClient)
+	return snapshotVolumes(snapshot, bucket, kubeClient, localKubeClient)
 }
 
 func snapshotVolumes(
 	snapshot *vsv1alpha1.VolumeSnapshot,
 	bucket objectstore.Objectstore,
-	storageClient storagev1.StorageV1Interface,
 	kubeClient, localKubeClient kubernetes.Interface) error {
 
 	// Snapshot log
@@ -133,7 +126,7 @@ func snapshotVolumes(
 		}
 
 		// get mounted node
-		nodeName, err := getPVCMountedNode(&pvc, storageClient, kubeClient)
+		nodeName, err := getPVCMountedNode(&pvc, kubeClient)
 		if err != nil {
 			snapshot.Status.SkippedClaims++
 			blog.Infof("  Skipping - PV not in use : %s", err.Error())
@@ -260,11 +253,10 @@ func snapshotVolumes(
 
 func getPVCMountedNode(
 	pvc *corev1.PersistentVolumeClaim,
-	storageClient storagev1.StorageV1Interface,
 	kubeClient kubernetes.Interface) (string, error) {
 
 	// check volume attachment
-	attaches, err := storageClient.VolumeAttachments().List(metav1.ListOptions{})
+	attaches, err := kubeClient.StorageV1().VolumeAttachments().List(metav1.ListOptions{})
 	if err != nil {
 		return "", fmt.Errorf("Error getting volumeattachments : %s", err.Error())
 	}
