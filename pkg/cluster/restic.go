@@ -90,6 +90,11 @@ func retryNotifyRestic(err error, wait time.Duration) {
 	klog.V(4).Infof("%s : will be checked again in %.2f seconds", err.Error(), wait.Seconds())
 }
 
+// For test pod logs
+var (
+	testResticPodLog = map[string]string{}
+)
+
 // DoResticJob executes restic Job with backing off
 func DoResticJob(ctx context.Context, job *batchv1.Job, kubeClient kubernetes.Interface, initInterval int) (string, error) {
 
@@ -159,6 +164,10 @@ func DoResticJob(ctx context.Context, job *batchv1.Job, kubeClient kubernetes.In
 				line, err := reader.ReadString('\n')
 				if line != "" {
 					out = line
+					// for test
+					if strings.Contains(out, "fake logs") {
+						out = testResticPodLog[name]
+					}
 				}
 				if err != nil || strings.Contains(out, "summary") || strings.Contains(out, "Fatal:") {
 					break

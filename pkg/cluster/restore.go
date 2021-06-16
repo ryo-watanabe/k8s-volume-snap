@@ -31,15 +31,19 @@ func (c *Cluster) Restore(
 		return err
 	}
 
-	return restoreResources(restore, snapshot, bucket, kubeClient, localKubeClient)
+	return restoreVolumes(restore, snapshot, bucket, kubeClient, localKubeClient)
 }
 
-func restoreResources(
+func restoreVolumes(
 	restore *vsv1alpha1.VolumeRestore,
 	snapshot *vsv1alpha1.VolumeSnapshot,
 	bucket objectstore.Objectstore,
 	kubeClient kubernetes.Interface,
 	localKubeClient kubernetes.Interface) error {
+
+	if restore == nil || snapshot == nil {
+		return fmt.Errorf("nil restore/snapshot passed")
+	}
 
 	ctx := context.TODO()
 	// Restore log

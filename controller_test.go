@@ -1,10 +1,9 @@
 package main
 
 import (
-	//"context"
+	"context"
 	"flag"
 	"fmt"
-	//"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -671,7 +670,7 @@ func TestQueues(t *testing.T) {
 		}
 		if c.expSnap != nil {
 			hSnap, _ := cntl.vsclientset.VolumesnapshotV1alpha1().VolumeSnapshots(cntl.namespace).Get(
-				c.snap.GetName(), metav1.GetOptions{})
+				context.TODO(), c.snap.GetName(), metav1.GetOptions{})
 			if !reflect.DeepEqual(c.expSnap, hSnap) {
 				t.Errorf("handled snapshot not matched in case [%s]\nexpected : %v\nbut got  : %v", name, c.expSnap, hSnap)
 			}
@@ -690,7 +689,7 @@ func TestQueues(t *testing.T) {
 		}
 		if c.expRestore != nil {
 			hRestore, _ := cntl.vsclientset.VolumesnapshotV1alpha1().VolumeRestores(cntl.namespace).Get(
-				c.restore.GetName(), metav1.GetOptions{})
+				context.TODO(), c.restore.GetName(), metav1.GetOptions{})
 			if !reflect.DeepEqual(c.expRestore, hRestore) {
 				t.Errorf("handled restore not matched in case [%s]\nexpected : %v\nbut got  : %v", name, c.expRestore, hRestore)
 			}
@@ -832,7 +831,7 @@ func TestDeleteSnapshot(t *testing.T) {
 		cntl.deleteSnapshot(c.delSnap)
 		if c.restored != nil {
 			restored, err := cntl.vsclientset.VolumesnapshotV1alpha1().VolumeSnapshots(cntl.namespace).Get(
-				"test1", metav1.GetOptions{})
+				context.TODO(), "test1", metav1.GetOptions{})
 			if err != nil {
 				t.Errorf("Error getting restored snapshot : %s", err.Error())
 			} else if !reflect.DeepEqual(c.restored, restored) {

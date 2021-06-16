@@ -41,6 +41,10 @@ func snapshotVolumes(
 	bucket objectstore.Objectstore,
 	kubeClient, localKubeClient kubernetes.Interface) error {
 
+	if snapshot == nil {
+		return fmt.Errorf("nil snapshot passed")
+	}
+
 	ctx := context.TODO()
 	// Snapshot log
 	blog := utils.NewNamedLog("snapshot:" + snapshot.ObjectMeta.Name)
@@ -62,9 +66,9 @@ func snapshotVolumes(
 	if err != nil {
 		// This is the first time that objectstore accessed
 		if objectstorePermError(err.Error()) {
-			return backoff.Permanent(fmt.Errorf("Getting temporaly credentials failed : %s", err.Error()))
+			return backoff.Permanent(fmt.Errorf("Getting temporaly credentials failed (do not retry) : %s", err.Error()))
 		}
-		return fmt.Errorf("Getting temporaly credentials failed : %s", err.Error())
+		return fmt.Errorf("Getting temporaly credentials failed (do retry) : %s", err.Error())
 	}
 
 	blog.Infof("Backing up volumes from cluster:%s", clusterId)
@@ -115,6 +119,10 @@ func snapshotVolumes(
 		// skip not bound PVs
 		if pvc.Status.Phase != "Bound" {
 			snapshot.Status.SkippedClaims++
+			snapshot.Status.SkippedMessages = append(
+				snapshot.Status.SkippedMessages,
+				fmt.Sprintf("%s/%s - PVC not bound", pvc.GetNamespace(), pvc.GetName()),
+			)
 			blog.Infof("  Skipping - PVC not bound")
 			continue
 		}
@@ -123,6 +131,10 @@ func snapshotVolumes(
 		pv, err := kubeClient.CoreV1().PersistentVolumes().Get(ctx, pvc.Spec.VolumeName, metav1.GetOptions{})
 		if err != nil {
 			snapshot.Status.SkippedClaims++
+			snapshot.Status.SkippedMessages = append(
+				snapshot.Status.SkippedMessages,
+				fmt.Sprintf("%s/%s - Error getting PV : %s", pvc.GetNamespace(), pvc.GetName(), err.Error()),
+			)
 			blog.Infof("  Skipping - Error getting PV : %s", err.Error())
 			continue
 		}
@@ -131,6 +143,10 @@ func snapshotVolumes(
 		nodeName, err := getPVCMountedNode(ctx, &pvc, kubeClient)
 		if err != nil {
 			snapshot.Status.SkippedClaims++
+			snapshot.Status.SkippedMessages = append(
+				snapshot.Status.SkippedMessages,
+				fmt.Sprintf("%s/%s - PV not in use : %s", pvc.GetNamespace(), pvc.GetName(), err.Error()),
+			)
 			blog.Infof("  Skipping - PV not in use : %s", err.Error())
 			continue
 		}
@@ -141,18 +157,16 @@ func snapshotVolumes(
 		volumePath, err := DoResticJob(ctx, globJob, kubeClient, 5)
 		if err != nil {
 			snapshot.Status.SkippedClaims++
+			snapshot.Status.SkippedMessages = append(
+				snapshot.Status.SkippedMessages,
+				fmt.Sprintf("%s/%s - Error globbing volume path : %s", pvc.GetNamespace(), pvc.GetName(), err.Error()),
+			)
 			blog.Infof("  Skipping - Error globbing volume path : %s", err.Error())
 			continue
 		}
 		blog.Infof("  Volume Path : %s", volumePath)
 
 		// take snapshot
-		snapPvc := vsv1alpha1.VolumeClaim{
-			Name: pvc.GetName(),
-			Namespace: pvc.GetNamespace(),
-			ClaimSpec: pvc.Spec,
-			SnapshotReady: false,
-		}
 		volumePath = strings.TrimSuffix(volumePath, "\n")
 		if pv.Spec.CSI != nil {
 			volumePath = volumePath + "/mount"
@@ -160,26 +174,45 @@ func snapshotVolumes(
 		snapJob := r.resticJobBackup(pvc.Spec.VolumeName, volumePath, nodeName)
 		output, err := DoResticJob(ctx, snapJob, kubeClient, 30)
 		if err != nil {
+			snapshot.Status.SkippedClaims++
+			snapshot.Status.SkippedMessages = append(
+				snapshot.Status.SkippedMessages,
+				fmt.Sprintf("%s/%s - Error taking snapshot : %s", pvc.GetNamespace(), pvc.GetName(), err.Error()),
+			)
 			blog.Warningf("!! Error taking snapshot PVC %s : %s", pvc.GetName(), err.Error())
-		} else {
-			// Perse backup summary
-			jsonBytes := []byte(output)
-			summary := new(ResticBackupSummary)
-			err = json.Unmarshal(jsonBytes, summary)
-			if err != nil {
-				blog.Warningf("!! Error persing restic backup summary : %s", err.Error())
-			}
-			snapPvc.SnapshotId = summary.SnapshotId
-			snapPvc.SnapshotSize = summary.TotalBytesProcessed
-			snapPvc.SnapshotFiles = summary.TotalFilesProcessed
-			snapPvc.SnapshotTime = metav1.Now()
-			snapPvc.SnapshotReady = true
-			blog.Infof("-- completed")
-
-			snapshot.Status.ReadyVolumeClaims++
-			snapshot.Status.TotalBytes += snapPvc.SnapshotSize
-			snapshot.Status.TotalFiles += snapPvc.SnapshotFiles
+			continue
 		}
+
+		// Perse backup summary
+		jsonBytes := []byte(output)
+		summary := new(ResticBackupSummary)
+		err = json.Unmarshal(jsonBytes, summary)
+		if err != nil {
+			snapshot.Status.SkippedClaims++
+			snapshot.Status.SkippedMessages = append(
+				snapshot.Status.SkippedMessages,
+				fmt.Sprintf("%s/%s - Error persing restic backup summary : %s", pvc.GetNamespace(), pvc.GetName(), err.Error()),
+			)
+			blog.Warningf("!! Error persing restic backup summary : %s", err.Error())
+			continue
+		}
+
+		snapPvc := vsv1alpha1.VolumeClaim{
+			Name: pvc.GetName(),
+			Namespace: pvc.GetNamespace(),
+			ClaimSpec: pvc.Spec,
+			SnapshotId: summary.SnapshotId,
+			SnapshotSize: summary.TotalBytesProcessed,
+			SnapshotFiles: summary.TotalFilesProcessed,
+			SnapshotTime: metav1.Now(),
+			SnapshotReady: true,
+		}
+
+		blog.Infof("-- completed")
+
+		snapshot.Status.ReadyVolumeClaims++
+		snapshot.Status.TotalBytes += snapPvc.SnapshotSize
+		snapshot.Status.TotalFiles += snapPvc.SnapshotFiles
 		snapshot.Spec.VolumeClaims = append(snapshot.Spec.VolumeClaims, snapPvc)
 		snapshot.Status.NumVolumeClaims++
 	}

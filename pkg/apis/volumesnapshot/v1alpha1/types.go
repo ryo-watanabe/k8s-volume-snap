@@ -47,6 +47,7 @@ type VolumeSnapshotStatus struct {
 	SnapshotEndTime   metav1.Time `json:"snapshotEndTime"`
 	NumVolumeClaims   int32       `json:"numVolumeClaims"`
 	SkippedClaims     int32       `json:"skippedClaims"`
+	SkippedMessages   []string    `json:"skippedMessages"`
 	ReadyVolumeClaims int32       `json:"readyVolumeClaims"`
 	TotalBytes        int64       `json:"totalBytes"`
 	TotalFiles        int64       `json:"totalFiles"`

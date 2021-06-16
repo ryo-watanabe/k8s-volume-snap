@@ -316,6 +316,11 @@ func (in *VolumeSnapshotStatus) DeepCopyInto(out *VolumeSnapshotStatus) {
 	*out = *in
 	in.SnapshotStartTime.DeepCopyInto(&out.SnapshotStartTime)
 	in.SnapshotEndTime.DeepCopyInto(&out.SnapshotEndTime)
+	if in.SkippedMessages != nil {
+		in, out := &in.SkippedMessages, &out.SkippedMessages
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 

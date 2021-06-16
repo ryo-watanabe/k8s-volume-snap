@@ -68,6 +68,7 @@ func getNamespaceUID(ctx context.Context, name string, kubeClient kubernetes.Int
 // k8s api errors not to retry
 var apiPermErrors = []string{
 	"Unauthorized",
+	"the server has asked for the client to provide credentials",
 }
 func apiPermError(error string) bool {
 	for _, e := range apiPermErrors {
