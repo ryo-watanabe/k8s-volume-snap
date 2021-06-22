@@ -481,7 +481,7 @@ func checkAction(expected, actual core.Action, t *testing.T) {
 func filterInformerActions(actions []core.Action) []core.Action {
 	ret := []core.Action{}
 	for _, action := range actions {
-		if action.GetNamespace() == snapshotNamespace && (action.Matches("get", "objectstoreconfigs") ||
+		if (action.Matches("get", "objectstoreconfigs") ||
 			action.Matches("list", "volumesnapshots") ||
 			action.Matches("get", "volumesnapshots") ||
 			action.Matches("watch", "volumesnapshots")) {
