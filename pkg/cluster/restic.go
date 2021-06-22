@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
-	//"github.com/golang/glog"
-	//"github.com/golang/protobuf/ptypes"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -19,9 +17,10 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// ResticSnapshot holds informations of a restic snapshot
 type ResticSnapshot struct {
-	ShortId  string   `json:"short_id"`
-	Id       string   `json:"id"`
+	ShortID  string   `json:"short_id"`
+	ID       string   `json:"id"`
 	Time     string   `json:"time"`
 	Paths    []string `json:"paths"`
 	Hostname string   `json:"hostname"`
@@ -30,11 +29,16 @@ type ResticSnapshot struct {
 	Parent   string   `json:"parent"`
 }
 
-func (snap *ResticSnapshot) GetSourceVolumeId() string {
+// GetSourceVolumeID returns the path name of the snapshot
+func (snap *ResticSnapshot) GetSourceVolumeID() string {
+	if len(snap.Paths) == 0 {
+		return ""
+	}
 	_, file := filepath.Split(snap.Paths[0])
 	return file
 }
 
+// ResticBackupSummary holds informations of a restic snapshot summary
 type ResticBackupSummary struct {
 	FilesNew            int64   `json:"files_new"`
 	FilesChanges        int64   `json:"files_changed"`
@@ -48,9 +52,10 @@ type ResticBackupSummary struct {
 	TotalFilesProcessed int64   `json:"total_files_processed"`
 	TotalBytesProcessed int64   `json:"total_bytes_processed"`
 	TotalDuration       float64 `json:"total_duration"`
-	SnapshotId          string  `json:"snapshot_id"`
+	SnapshotID          string  `json:"snapshot_id"`
 }
 
+// Restic holds infomations for restic repository access
 type Restic struct {
 	password     string
 	accesskey    string
@@ -82,7 +87,7 @@ func NewRestic(endpoint, bucket, clusterid, password,
 	}
 }
 
-func (r *Restic)repository() string {
+func (r *Restic) repository() string {
 	return "s3:" + r.endpoint + "/" + r.bucket + "/" + r.clusterid
 }
 
@@ -96,7 +101,8 @@ var (
 )
 
 // DoResticJob executes restic Job with backing off
-func DoResticJob(ctx context.Context, job *batchv1.Job, kubeClient kubernetes.Interface, initInterval int) (string, error) {
+func DoResticJob(ctx context.Context, job *batchv1.Job,
+	kubeClient kubernetes.Interface, initInterval int) (string, error) {
 
 	name := job.GetName()
 	namespace := job.GetNamespace()
@@ -110,13 +116,21 @@ func DoResticJob(ctx context.Context, job *batchv1.Job, kubeClient kubernetes.In
 		if !errors.IsAlreadyExists(err) {
 			return "", fmt.Errorf("Creating restic job error - %s", err.Error())
 		}
-		kubeClient.BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{PropagationPolicy: &dp})
+		err = kubeClient.BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{PropagationPolicy: &dp})
+		if err != nil {
+			klog.Warningf("Error deleting job : %s", err.Error())
+		}
 		_, err = kubeClient.BatchV1().Jobs(namespace).Create(ctx, job, metav1.CreateOptions{})
 		if err != nil {
 			return "", fmt.Errorf("Re-creating restic job error - %s", err.Error())
 		}
 	}
-	defer kubeClient.BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{PropagationPolicy: &dp})
+	defer func() {
+		err := kubeClient.BatchV1().Jobs(namespace).Delete(ctx, name, metav1.DeleteOptions{PropagationPolicy: &dp})
+		if err != nil {
+			klog.Warningf("Error deleting job : %s", err.Error())
+		}
+	}()
 
 	// wait for job completed with backoff retry
 	b := backoff.NewExponentialBackOff()
@@ -132,9 +146,8 @@ func DoResticJob(ctx context.Context, job *batchv1.Job, kubeClient kubernetes.In
 		if len(chkJob.Status.Conditions) > 0 {
 			if chkJob.Status.Conditions[0].Type == "Failed" {
 				return backoff.Permanent(fmt.Errorf("Job %s failed", name))
-			} else {
-				return nil
 			}
+			return nil
 		}
 		return fmt.Errorf("Job %s is running", name)
 	}
@@ -157,7 +170,12 @@ func DoResticJob(ctx context.Context, job *batchv1.Job, kubeClient kubernetes.In
 				return "", fmt.Errorf("Logs request error - %s", err.Error())
 			}
 			reader := bufio.NewReader(podLogs)
-			defer podLogs.Close()
+			defer func() {
+				err := podLogs.Close()
+				if err != nil {
+					klog.Warningf("Error closing pod logs : %s", err.Error())
+				}
+			}()
 			// return a line which contains 'summary' or a last one
 			out := ""
 			for {
@@ -184,7 +202,7 @@ func DoResticJob(ctx context.Context, job *batchv1.Job, kubeClient kubernetes.In
 
 // restic snapshots
 func (r *Restic) resticJobListSnapshots() *batchv1.Job {
-	job := r.resticJob("restic-job-list-snapshots-" + r.id, r.namespace)
+	job := r.resticJob("restic-job-list-snapshots-"+r.id, r.namespace)
 	job.Spec.Template.Spec.Containers[0].Args = append(
 		job.Spec.Template.Spec.Containers[0].Args,
 		[]string{"snapshots", "--json"}...,
@@ -193,11 +211,11 @@ func (r *Restic) resticJobListSnapshots() *batchv1.Job {
 }
 
 // restic backup
-func (r *Restic) resticJobBackup(volumeId, hostPath, nodeName string) *batchv1.Job {
-	job := r.resticJob("restic-job-backup-" + volumeId, "default")
+func (r *Restic) resticJobBackup(volumeID, hostPath, nodeName string) *batchv1.Job {
+	job := r.resticJob("restic-job-backup-"+volumeID, "default")
 	job.Spec.Template.Spec.Containers[0].Args = append(
 		job.Spec.Template.Spec.Containers[0].Args,
-		[]string{"backup", "--json", "--tag", r.id, "/" + volumeId}...,
+		[]string{"backup", "--json", "--tag", r.id, "/" + volumeID}...,
 	)
 	// add node selector
 	job.Spec.Template.Spec.NodeSelector = map[string]string{
@@ -223,7 +241,7 @@ func (r *Restic) resticJobBackup(volumeId, hostPath, nodeName string) *batchv1.J
 	// volume mounts
 	volumeMount := corev1.VolumeMount{
 		Name:      "pv-path",
-		MountPath: "/" + volumeId,
+		MountPath: "/" + volumeID,
 		ReadOnly:  true,
 	}
 	job.Spec.Template.Spec.Containers[0].VolumeMounts = append(
@@ -239,18 +257,18 @@ func (r *Restic) resticJobBackup(volumeId, hostPath, nodeName string) *batchv1.J
 }
 
 // restic forget (delete)
-func (r *Restic) resticJobDelete(snapshotId string) *batchv1.Job {
-	job := r.resticJob("restic-job-delete-" + snapshotId, r.namespace)
+func (r *Restic) resticJobDelete(snapshotID string) *batchv1.Job {
+	job := r.resticJob("restic-job-delete-"+snapshotID, r.namespace)
 	job.Spec.Template.Spec.Containers[0].Args = append(
 		job.Spec.Template.Spec.Containers[0].Args,
-		[]string{"forget", "--prune", snapshotId}...,
+		[]string{"forget", "--prune", snapshotID}...,
 	)
 	return job
 }
 
 // restic init
 func (r *Restic) resticJobInit() *batchv1.Job {
-	job := r.resticJob("restic-job-init-repo-" + r.clusterid, r.namespace)
+	job := r.resticJob("restic-job-init-repo-"+r.clusterid, r.namespace)
 	job.Spec.Template.Spec.Containers[0].Args = append(
 		job.Spec.Template.Spec.Containers[0].Args,
 		[]string{"init"}...,
@@ -259,12 +277,12 @@ func (r *Restic) resticJobInit() *batchv1.Job {
 }
 
 // restic restore
-func (r *Restic) resticJobRestore(snapId, volumeId, pvcName, pvcNamespace string) *batchv1.Job {
+func (r *Restic) resticJobRestore(snapID, volumeID, pvcName, pvcNamespace string) *batchv1.Job {
 	// Job
-	job := r.resticJob("restic-job-restore-"+snapId, pvcNamespace)
+	job := r.resticJob("restic-job-restore-"+snapID, pvcNamespace)
 	job.Spec.Template.Spec.Containers[0].Args = append(
 		job.Spec.Template.Spec.Containers[0].Args,
-		[]string{"restore", "-t", "/", snapId}...,
+		[]string{"restore", "-t", "/", snapID}...,
 	)
 	// volumes
 	volume := corev1.Volume{
@@ -279,7 +297,7 @@ func (r *Restic) resticJobRestore(snapId, volumeId, pvcName, pvcNamespace string
 	// volume mounts
 	volumeMount := corev1.VolumeMount{
 		Name:      "pvc",
-		MountPath: "/" + volumeId,
+		MountPath: "/" + volumeID,
 	}
 	job.Spec.Template.Spec.Containers[0].VolumeMounts = append(
 		job.Spec.Template.Spec.Containers[0].VolumeMounts,
@@ -348,12 +366,12 @@ func (r *Restic) resticJob(name, namespace string) *batchv1.Job {
 }
 
 // pv path globber
-func (r *Restic) globberJob(volumeId, nodeName string) *batchv1.Job {
+func (r *Restic) globberJob(volumeID, nodeName string) *batchv1.Job {
 
 	backoffLimit := int32(0)
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "glob-" + volumeId + "-" + nodeName,
+			Name:      "glob-" + volumeID + "-" + nodeName,
 			Namespace: "default",
 		},
 		Spec: batchv1.JobSpec{
@@ -366,7 +384,7 @@ func (r *Restic) globberJob(volumeId, nodeName string) *batchv1.Job {
 							Command: []string{
 								"/bin/sh",
 								"-c",
-								"ls -d /var/lib/kubelet/pods/*/volumes/*/" + volumeId,
+								"ls -d /var/lib/kubelet/pods/*/volumes/*/" + volumeID,
 							},
 							ImagePullPolicy: "IfNotPresent",
 						},

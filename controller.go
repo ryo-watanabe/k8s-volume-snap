@@ -59,8 +59,8 @@ type Controller struct {
 	restoreQueue  workqueue.RateLimitingInterface
 	recorder      record.EventRecorder
 
-	insecure         bool
-	createbucket     bool
+	insecure     bool
+	createbucket bool
 
 	maxretryelapsedsec int
 
@@ -68,7 +68,8 @@ type Controller struct {
 	labels    map[string]string
 
 	clusterCmd cluster.Interface
-	getBucket  func(namespace, objectstoreConfig string, kubeclient kubernetes.Interface, client clientset.Interface, insecure bool) (objectstore.Objectstore, error)
+	getBucket  func(namespace, objectstoreConfig string, kubeclient kubernetes.Interface,
+		client clientset.Interface, insecure bool) (objectstore.Objectstore, error)
 }
 
 // NewController returns a new controller
@@ -157,7 +158,8 @@ func (c *Controller) Run(snapshotthreads, restorethreads int, stopCh <-chan stru
 	//klog.Info("Checking CRDs")
 
 	klog.Info("Checking objectstore buckets")
-	osConfigs, err := c.vsclientset.VolumesnapshotV1alpha1().ObjectstoreConfigs(c.namespace).List(ctx, metav1.ListOptions{})
+	osConfigs, err := c.vsclientset.VolumesnapshotV1alpha1().ObjectstoreConfigs(c.namespace).List(
+		ctx, metav1.ListOptions{})
 	if err != nil {
 		klog.Exitf("List Objectstore Config error : %s", err.Error())
 	}
@@ -167,7 +169,8 @@ func (c *Controller) Run(snapshotthreads, restorethreads int, stopCh <-chan stru
 		if err != nil {
 			klog.Exitf("Get bucket error for ObjectstoreConfig %s * %s", os.ObjectMeta.Name, err.Error())
 		}
-		klog.Infof("- Objectstore Config name:%s endpoint:%s bucket:%s", bucket.GetName(), bucket.GetEndpoint(), bucket.GetBucketName())
+		klog.Infof("- Objectstore Config name:%s endpoint:%s bucket:%s",
+			bucket.GetName(), bucket.GetEndpoint(), bucket.GetBucketName())
 
 		found, err := bucket.ChkBucket()
 		if err != nil {
@@ -222,7 +225,8 @@ func (c *Controller) Run(snapshotthreads, restorethreads int, stopCh <-chan stru
 	return nil
 }
 
-func getBucketFunc(namespace, objectstoreConfig string, kubeclient kubernetes.Interface, client clientset.Interface, insecure bool) (objectstore.Objectstore, error) {
+func getBucketFunc(namespace, objectstoreConfig string, kubeclient kubernetes.Interface,
+	client clientset.Interface, insecure bool) (objectstore.Objectstore, error) {
 
 	ctx := context.TODO()
 	// bucket

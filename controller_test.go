@@ -53,7 +53,6 @@ type Case struct {
 	handleKey        string
 	restoreerror     error
 	snaperror        error
-	deleteerror      error
 }
 
 func newSnapshotCase(resultStatus, reason string) Case {
@@ -161,7 +160,7 @@ func newRestoreCase(resultStatus, reason string) Case {
 
 func TestRestore(t *testing.T) {
 
-	cases :=[]Case{
+	cases := []Case{
 		// 0 "create restore":
 		Case{
 			restores: []*volumesnapshot.VolumeRestore{
@@ -304,9 +303,9 @@ func newConfiguredRestore(name, phase string) *volumesnapshot.VolumeRestore {
 			Namespace: metav1.NamespaceDefault,
 		},
 		Spec: volumesnapshot.VolumeRestoreSpec{
-			ClusterName:           name,
-			Kubeconfig:            "kubeconfig",
-			VolumeSnapshotName:    "snapshot",
+			ClusterName:        name,
+			Kubeconfig:         "kubeconfig",
+			VolumeSnapshotName: "snapshot",
 		},
 		Status: volumesnapshot.VolumeRestoreStatus{
 			Phase: phase,
@@ -319,9 +318,9 @@ type mockCluster struct {
 	cluster.Interface
 }
 
-
 // Snapshot for fake cluster interface
 var snapshotErr error
+
 func (c *mockCluster) Snapshot(
 	snapshot *vsv1alpha1.VolumeSnapshot,
 	bucket objectstore.Objectstore,
@@ -331,6 +330,7 @@ func (c *mockCluster) Snapshot(
 
 // DeleteSnapshot for fake cluster interface
 var deleteErr error
+
 func (c *mockCluster) DeleteSnapshot(
 	snapshot *vsv1alpha1.VolumeSnapshot,
 	bucket objectstore.Objectstore,
@@ -340,6 +340,7 @@ func (c *mockCluster) DeleteSnapshot(
 
 // Restore for fake cluster interface
 var restoreErr error
+
 func (c *mockCluster) Restore(
 	restore *vsv1alpha1.VolumeRestore,
 	snapshot *vsv1alpha1.VolumeSnapshot,
@@ -592,27 +593,27 @@ func RestoreTestCase(c *Case, t *testing.T) {
 
 func TestQueues(t *testing.T) {
 
-	utilruntime.ErrorHandlers = []func(error){ AddRuntimeError }
+	utilruntime.ErrorHandlers = []func(error){AddRuntimeError}
 	num := 1
 
 	cases := map[string]struct {
-		snap *volumesnapshot.VolumeSnapshot
-		restore *volumesnapshot.VolumeRestore
-		objSnap interface{}
+		snap       *volumesnapshot.VolumeSnapshot
+		restore    *volumesnapshot.VolumeRestore
+		objSnap    interface{}
 		objRestore interface{}
-		keySnap interface{}
+		keySnap    interface{}
 		keyRestore interface{}
-		expSnap *volumesnapshot.VolumeSnapshot
+		expSnap    *volumesnapshot.VolumeSnapshot
 		expRestore *volumesnapshot.VolumeRestore
-		expRErr string
-		dup int
+		expRErr    string
+		dup        int
 	}{
 		"snap InQueue": {
-			snap: newConfiguredSnapshot("test1", ""),
+			snap:    newConfiguredSnapshot("test1", ""),
 			expSnap: newConfiguredSnapshot("test1", "InQueue"),
 		},
 		"restore InQueue": {
-			restore: newConfiguredRestore("test1", ""),
+			restore:    newConfiguredRestore("test1", ""),
 			expRestore: newConfiguredRestore("test1", "InQueue"),
 		},
 		"snap without meta": {
@@ -621,7 +622,7 @@ func TestQueues(t *testing.T) {
 		},
 		"restore without meta": {
 			objRestore: "objSnap",
-			expRErr: "object has no meta",
+			expRErr:    "object has no meta",
 		},
 		"snap key error": {
 			keySnap: "a/b/c",
@@ -633,11 +634,11 @@ func TestQueues(t *testing.T) {
 		},
 		"restore key error": {
 			keyRestore: "a/b/c",
-			expRErr: "invalid resource key",
+			expRErr:    "invalid resource key",
 		},
 		"restore key is not a string": {
 			keyRestore: &num,
-			expRErr: "expected string in workqueue but got",
+			expRErr:    "expected string in workqueue but got",
 		},
 	}
 
@@ -741,6 +742,7 @@ func (b *bucketMock) Delete(filename string) error {
 	deleteFilename = filename
 	return nil
 }
+
 /*
 var downloadFilename string
 
@@ -771,17 +773,17 @@ func AddRuntimeError(err error) {
 
 func TestDeleteSnapshot(t *testing.T) {
 
-	utilruntime.ErrorHandlers = []func(error){ AddRuntimeError }
+	utilruntime.ErrorHandlers = []func(error){AddRuntimeError}
 	othersnap := newConfiguredSnapshot("test1", "Completed")
 	othersnap.SetNamespace("otherns")
 
 	cases := map[string]struct {
-		snap *volumesnapshot.VolumeSnapshot
-		delSnap  interface{}
-		delErr   error
-		restored *volumesnapshot.VolumeSnapshot
+		snap      *volumesnapshot.VolumeSnapshot
+		delSnap   interface{}
+		delErr    error
+		restored  *volumesnapshot.VolumeSnapshot
 		bucketErr error
-		expRErr string
+		expRErr   string
 	}{
 		"Successfully deleted": {
 			delSnap: newConfiguredSnapshot("test1", "Completed"),
@@ -791,23 +793,23 @@ func TestDeleteSnapshot(t *testing.T) {
 			delErr:   fmt.Errorf("Some delete snapshot error"),
 			restored: newConfiguredSnapshot("test1", "DeleteFailed"),
 		},
-		"GetBucket error" : {
-			delSnap: newConfiguredSnapshot("test1", "Completed"),
+		"GetBucket error": {
+			delSnap:   newConfiguredSnapshot("test1", "Completed"),
 			bucketErr: fmt.Errorf("Mock Bucket error"),
-			expRErr: "Mock Bucket error",
+			expRErr:   "Mock Bucket error",
 		},
-		"object error" : {
-			delSnap: newConfiguredRestore("test1", "Completed"), // not a snapshot
+		"object error": {
+			delSnap:   newConfiguredRestore("test1", "Completed"), // not a snapshot
 			bucketErr: fmt.Errorf("Must not reach here"),
 		},
-		"other namespace" : {
-			delSnap: othersnap,
+		"other namespace": {
+			delSnap:   othersnap,
 			bucketErr: fmt.Errorf("Must not reach here"),
 		},
-		"create error" : {
-			snap: newConfiguredSnapshot("test1", "Completed"),
+		"create error": {
+			snap:    newConfiguredSnapshot("test1", "Completed"),
 			delSnap: newConfiguredSnapshot("test1", "Completed"),
-			delErr:   fmt.Errorf("Some delete snapshot error"),
+			delErr:  fmt.Errorf("Some delete snapshot error"),
 			expRErr: "already exists",
 		},
 	}

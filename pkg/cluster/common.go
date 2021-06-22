@@ -13,7 +13,7 @@ import (
 	"github.com/ryo-watanabe/k8s-volume-snap/pkg/objectstore"
 )
 
-// Cluster interfaces for taking and restoring snapshot of k8s clusters
+// Interface for taking and restoring snapshots of k8s clusters
 type Interface interface {
 	Snapshot(snapshot *vsv1alpha1.VolumeSnapshot,
 		bucket objectstore.Objectstore,
@@ -32,7 +32,7 @@ type Cluster struct {
 	Interface
 }
 
-// NewClusterCmd returns new Cmd
+// NewCluster returns new Cmd
 func NewCluster() *Cluster {
 	return &Cluster{}
 }
@@ -70,6 +70,7 @@ var apiPermErrors = []string{
 	"Unauthorized",
 	"the server has asked for the client to provide credentials",
 }
+
 func apiPermError(error string) bool {
 	for _, e := range apiPermErrors {
 		if strings.Contains(error, e) {
@@ -85,6 +86,7 @@ var obstPermErrors = []string{
 	"InvalidAccessKeyId",
 	"NoSuchBucket",
 }
+
 func objectstorePermError(error string) bool {
 	for _, e := range obstPermErrors {
 		if strings.Contains(error, e) {

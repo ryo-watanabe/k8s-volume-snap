@@ -21,9 +21,9 @@ import (
 	"time"
 
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
-	"k8s.io/client-go/rest"
 
 	// Uncomment the following line to load the gcp plugin (only required to authenticate against GKE clusters).
 	// _ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -91,7 +91,8 @@ func main() {
 		cluster.NewCluster(),
 	)
 
-	// notice that there is no need to run Start methods in a separate goroutine. (i.e. go kubeInformerFactory.Start(stopCh)
+	// notice that there is no need to run Start methods in a separate goroutine.
+	// i.e. go kubeInformerFactory.Start(stopCh)
 	// Start method is non-blocking and runs all registered informers in a dedicated goroutine.
 	vsInformerFactory.Start(stopCh)
 
@@ -102,7 +103,8 @@ func main() {
 
 func init() {
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
-	flag.StringVar(&masterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
+	flag.StringVar(&masterURL, "master", "",
+		"The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
 	flag.StringVar(&namespace, "namespace", "k8s-snap", "Namespace for k8s-snap")
 	flag.IntVar(&snapshotthreads, "snapshotthreads", 5, "Number of snapshot threads")
 	flag.IntVar(&restorethreads, "restorethreads", 2, "Number of restore threads")

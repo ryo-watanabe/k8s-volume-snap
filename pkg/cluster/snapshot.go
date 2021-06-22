@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	corev1 "k8s.io/api/core/v1"
 	"github.com/cenkalti/backoff"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	vsv1alpha1 "github.com/ryo-watanabe/k8s-volume-snap/pkg/apis/volumesnapshot/v1alpha1"
@@ -50,7 +50,7 @@ func snapshotVolumes(
 	blog := utils.NewNamedLog("snapshot:" + snapshot.ObjectMeta.Name)
 
 	// get clusterId (= UID of kube-system namespace)
-	clusterId, err := getNamespaceUID(ctx, "kube-system", kubeClient)
+	clusterID, err := getNamespaceUID(ctx, "kube-system", kubeClient)
 	if err != nil {
 		// This is the first time that k8s api of target cluster accessed
 		if apiPermError(err.Error()) {
@@ -58,11 +58,11 @@ func snapshotVolumes(
 		}
 		return fmt.Errorf("Getting clusterId(=kube-system UID) failed : %s", err.Error())
 	}
-	snapshot.Spec.ClusterId = clusterId
-	resticPassword := utils.MakePassword(clusterId, 16)
+	snapshot.Spec.ClusterId = clusterID
+	resticPassword := utils.MakePassword(clusterID, 16)
 
 	// get 1h valid credentials to access objectstore
-	creds, err := bucket.CreateAssumeRole(clusterId, 3600)
+	creds, err := bucket.CreateAssumeRole(clusterID, 3600)
 	if err != nil {
 		// This is the first time that objectstore accessed
 		if objectstorePermError(err.Error()) {
@@ -71,13 +71,13 @@ func snapshotVolumes(
 		return fmt.Errorf("Getting temporaly credentials failed (do retry) : %s", err.Error())
 	}
 
-	blog.Infof("Backing up volumes from cluster:%s", clusterId)
+	blog.Infof("Backing up volumes from cluster:%s", clusterID)
 
 	// prepare user restic / admin restic
-	r := NewRestic(bucket.GetEndpoint(), bucket.GetBucketName(), clusterId, resticPassword,
+	r := NewRestic(bucket.GetEndpoint(), bucket.GetBucketName(), clusterID, resticPassword,
 		*creds.AccessKeyId, *creds.SecretAccessKey, *creds.SessionToken,
 		snapshot.GetNamespace(), snapshot.GetName())
-	adminRestic := NewRestic(bucket.GetEndpoint(), bucket.GetBucketName(), clusterId, resticPassword,
+	adminRestic := NewRestic(bucket.GetEndpoint(), bucket.GetBucketName(), clusterID, resticPassword,
 		bucket.GetAccessKey(), bucket.GetSecretKey(), "",
 		snapshot.GetNamespace(), snapshot.GetName())
 
@@ -112,7 +112,7 @@ func snapshotVolumes(
 	snapshot.Status.SnapshotStartTime = metav1.Now()
 
 	// take snapshots of PVCs
-	for _, pvc := range(pvcs.Items) {
+	for i, pvc := range pvcs.Items {
 
 		blog.Infof("Backing up pvc : %s/%s", pvc.GetNamespace(), pvc.GetName())
 
@@ -140,7 +140,7 @@ func snapshotVolumes(
 		}
 
 		// get mounted node
-		nodeName, err := getPVCMountedNode(ctx, &pvc, kubeClient)
+		nodeName, err := getPVCMountedNode(ctx, &pvcs.Items[i], kubeClient)
 		if err != nil {
 			snapshot.Status.SkippedClaims++
 			snapshot.Status.SkippedMessages = append(
@@ -198,13 +198,13 @@ func snapshotVolumes(
 		}
 
 		snapPvc := vsv1alpha1.VolumeClaim{
-			Name: pvc.GetName(),
-			Namespace: pvc.GetNamespace(),
-			ClaimSpec: pvc.Spec,
-			SnapshotId: summary.SnapshotId,
-			SnapshotSize: summary.TotalBytesProcessed,
+			Name:          pvc.GetName(),
+			Namespace:     pvc.GetNamespace(),
+			ClaimSpec:     pvc.Spec,
+			SnapshotId:    summary.SnapshotID,
+			SnapshotSize:  summary.TotalBytesProcessed,
 			SnapshotFiles: summary.TotalFilesProcessed,
-			SnapshotTime: metav1.Now(),
+			SnapshotTime:  metav1.Now(),
 			SnapshotReady: true,
 		}
 
@@ -225,10 +225,10 @@ func snapshotVolumes(
 		return fmt.Errorf("Creating tgz file failed : %s", err.Error())
 	}
 	tgz := gzip.NewWriter(snapshotFile)
-	defer tgz.Close()
+	defer func() { _ = tgz.Close() }()
 
 	tarWriter := tar.NewWriter(tgz)
-	defer tarWriter.Close()
+	defer func() { _ = tarWriter.Close() }()
 
 	blog.Info("Making volumesnapshot.json")
 
@@ -257,13 +257,13 @@ func snapshotVolumes(
 		return fmt.Errorf("tar writer volumesnapshot.json content failed : %s", err.Error())
 	}
 
-	tarWriter.Close()
-	tgz.Close()
-	snapshotFile.Close()
+	_ = tarWriter.Close()
+	_ = tgz.Close()
+	_ = snapshotFile.Close()
 
 	// upload custom resource json
 	snapshotUploadFile, err := os.Open("/tmp/" + snapshot.ObjectMeta.Name + ".tgz")
-	defer snapshotUploadFile.Close()
+	defer func() { _ = snapshotUploadFile.Close() }()
 	if err != nil {
 		return backoff.Permanent(fmt.Errorf("Re-opening tgz file failed : %s", err.Error()))
 	}
@@ -296,7 +296,7 @@ func getPVCMountedNode(
 	if err != nil {
 		return "", fmt.Errorf("Error getting volumeattachments : %s", err.Error())
 	}
-	for _, attach := range(attaches.Items) {
+	for _, attach := range attaches.Items {
 		if *attach.Spec.Source.PersistentVolumeName == pvc.Spec.VolumeName {
 			if attach.Status.Attached {
 				return attach.Spec.NodeName, nil
@@ -309,20 +309,21 @@ func getPVCMountedNode(
 	if err != nil {
 		return "", fmt.Errorf("Error getting pods : %s", err.Error())
 	}
-	for _, pod := range(pods.Items) {
+	for _, pod := range pods.Items {
 		if pod.Status.Phase != "Running" {
 			continue
 		}
 		volumeName := ""
-		for _, vol := range(pod.Spec.Volumes) {
-			if vol.VolumeSource.PersistentVolumeClaim != nil && vol.VolumeSource.PersistentVolumeClaim.ClaimName == pvc.GetName() {
+		for _, vol := range pod.Spec.Volumes {
+			if vol.VolumeSource.PersistentVolumeClaim != nil &&
+				vol.VolumeSource.PersistentVolumeClaim.ClaimName == pvc.GetName() {
 				volumeName = vol.Name
 				break
 			}
 		}
 		if volumeName != "" {
-			for _, container := range(pod.Spec.Containers) {
-				for _, mount := range(container.VolumeMounts) {
+			for _, container := range pod.Spec.Containers {
+				for _, mount := range container.VolumeMounts {
 					if mount.Name == volumeName {
 						return pod.Spec.NodeName, nil
 					}

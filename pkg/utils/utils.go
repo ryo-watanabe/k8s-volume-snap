@@ -1,32 +1,21 @@
 package utils
 
 import (
-	"crypto/md5"
+	"crypto/md5" //nolint:gosec
 	"encoding/hex"
 	"math/big"
-	"math/rand"
-	"time"
+	"math/rand" //nolint:gosec
 
 	"k8s.io/klog/v2"
 )
 
 const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
 
-// RandString generates length n random string
-func RandString(n int) string {
-	rand.Seed(time.Now().UnixNano())
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
-	}
-	return string(b)
-}
-
 // MakePassword generates length n password from str
 func MakePassword(str string, n int) string {
 
 	// md5 of the string
-	sum := md5.Sum([]byte(str))
+	sum := md5.Sum([]byte(str)) //nolint:gosec
 	hexstr := hex.EncodeToString(sum[:])
 
 	// get random seed with big
@@ -37,7 +26,7 @@ func MakePassword(str string, n int) string {
 	rand.Seed(bi.Int64())
 	b := make([]byte, n)
 	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
+		b[i] = letters[rand.Intn(len(letters))] //nolint:gosec
 	}
 	return string(b)
 }

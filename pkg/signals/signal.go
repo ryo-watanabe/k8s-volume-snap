@@ -41,4 +41,3 @@ func SetupSignalHandler() (stopCh <-chan struct{}) {
 
 	return stop
 }
-

@@ -24,15 +24,15 @@ type VolumeSnapshotSpec struct {
 	ObjectstoreConfig string        `json:"objectstoreConfig"`
 	IncludeNamespaces []string      `json:"includeNamespaces"` // If not set, snapshot all namespaces
 	VolumeClaims      []VolumeClaim `json:"volumeClaims"`
-	ClusterId         string        `json:"clusterId"` // Used for restic backup path, accuired from kube-system namespace UID of each cluster
+	ClusterId         string        `json:"clusterId"` //nolint:golint // = kube-system namespace UID
 }
 
 // VolumeClaim keeps the spec of each volume snapshot
 type VolumeClaim struct {
-	Name          string                           `json:"name"`      // Name of source PVC
-	Namespace     string                           `json:"namespace"` // Namespace of source PVC
-	ClaimSpec     corev1.PersistentVolumeClaimSpec `json:"claimSpec"` // Spec of source PVC
-	SnapshotId    string                           `json:"snapshotId"`
+	Name          string                           `json:"name"`       // Name of source PVC
+	Namespace     string                           `json:"namespace"`  // Namespace of source PVC
+	ClaimSpec     corev1.PersistentVolumeClaimSpec `json:"claimSpec"`  // Spec of source PVC
+	SnapshotId    string                           `json:"snapshotId"` //nolint:golint
 	SnapshotTime  metav1.Time                      `json:"snapshotTime"`
 	SnapshotSize  int64                            `json:"snapshotSize"`
 	SnapshotFiles int64                            `json:"snapshotFiles"`
@@ -56,7 +56,7 @@ type VolumeSnapshotStatus struct {
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// Restore is a specification for a Restore resource
+// VolumeRestore is a specification for a Restore resource
 type VolumeRestore struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -65,16 +65,16 @@ type VolumeRestore struct {
 	Status VolumeRestoreStatus `json:"status"`
 }
 
-// RestoreSpec is the spec for a Restore resource
+// VolumeRestoreSpec is the spec for a Restore resource
 type VolumeRestoreSpec struct {
 	ClusterName        string   `json:"clusterName"`
 	VolumeSnapshotName string   `json:"volumeSnapshotName"`
 	Kubeconfig         string   `json:"kubeconfig"`
 	RestoreNamespaces  []string `json:"restoreNamespaces"` // If not set, restore all namespaces in the snapshot
-	StrictVolumeClass  bool     `json:"strictVolumeClass"` // If false, restore volumes even if original volume class is not available
+	StrictVolumeClass  bool     `json:"strictVolumeClass"` // Do not restore if original volume class is not available
 }
 
-// RestoreStatus is the status for a Restore resource
+// VolumeRestoreStatus is the status for a Restore resource
 type VolumeRestoreStatus struct {
 	Phase                 string      `json:"phase"`
 	Reason                string      `json:"reason"`
@@ -116,7 +116,7 @@ type VolumeSnapshotList struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// RestoreList is a list of Restore resources
+// VolumeRestoreList is a list of Restore resources
 type VolumeRestoreList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata"`

@@ -2,15 +2,15 @@ package cluster
 
 import (
 	"context"
-	"fmt"
 	"encoding/json"
+	"fmt"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/cenkalti/backoff"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"github.com/cenkalti/backoff"
 	"k8s.io/klog/v2"
 
 	vsv1alpha1 "github.com/ryo-watanabe/k8s-volume-snap/pkg/apis/volumesnapshot/v1alpha1"
@@ -50,7 +50,7 @@ func restoreVolumes(
 	rlog := utils.NewNamedLog("restore:" + restore.ObjectMeta.Name)
 
 	// get clusterId (= UID of kube-system namespace)
-	restoreClusterId, err := getNamespaceUID(ctx, "kube-system", kubeClient)
+	restoreClusterID, err := getNamespaceUID(ctx, "kube-system", kubeClient)
 	if err != nil {
 
 		// This is the first time that k8s api of target cluster accessed
@@ -59,22 +59,22 @@ func restoreVolumes(
 		}
 		return fmt.Errorf("Getting clusterId(=kube-system UID) failed : %s", err.Error())
 	}
-	clusterId := snapshot.Spec.ClusterId
-	resticPassword := utils.MakePassword(clusterId, 16)
+	clusterID := snapshot.Spec.ClusterId
+	resticPassword := utils.MakePassword(clusterID, 16)
 
-	rlog.Infof("Restoring volumes on cluster:%s from snapshot:%s", restoreClusterId, clusterId)
+	rlog.Infof("Restoring volumes on cluster:%s from snapshot:%s", restoreClusterID, clusterID)
 
 	// get 1h valid credentials to access objectstore
-	creds, err := bucket.CreateAssumeRole(clusterId, 7200)
+	creds, err := bucket.CreateAssumeRole(clusterID, 7200)
 	if err != nil {
 		return fmt.Errorf("Getting temporaly credentials failed : %s", err.Error())
 	}
 
 	// prepare user restic / admin restic
-	r := NewRestic(bucket.GetEndpoint(), bucket.GetBucketName(), clusterId, resticPassword,
+	r := NewRestic(bucket.GetEndpoint(), bucket.GetBucketName(), clusterID, resticPassword,
 		*creds.AccessKeyId, *creds.SecretAccessKey, *creds.SessionToken,
 		snapshot.GetNamespace(), snapshot.GetName())
-	adminRestic := NewRestic(bucket.GetEndpoint(), bucket.GetBucketName(), clusterId, resticPassword,
+	adminRestic := NewRestic(bucket.GetEndpoint(), bucket.GetBucketName(), clusterID, resticPassword,
 		bucket.GetAccessKey(), bucket.GetSecretKey(), "",
 		snapshot.GetNamespace(), snapshot.GetName())
 
@@ -86,8 +86,8 @@ func restoreVolumes(
 	}
 	// Perse snapshot list
 	jsonBytes := []byte(output)
-	snapshotList := new([]ResticSnapshot)
-	err = json.Unmarshal(jsonBytes, snapshotList)
+	snapshotList := []ResticSnapshot{}
+	err = json.Unmarshal(jsonBytes, &snapshotList)
 	if err != nil {
 		return fmt.Errorf("Error persing restic snapshot : %s : %s", err.Error(), output)
 	}
@@ -95,15 +95,15 @@ func restoreVolumes(
 	restore.Status.NumVolumeClaims = int32(len(snapshot.Spec.VolumeClaims))
 
 	// restore volumes
-	for _, snapPvc := range(snapshot.Spec.VolumeClaims) {
+	for _, snapPvc := range snapshot.Spec.VolumeClaims {
 
 		rlog.Infof("Restoring pvc : %s/%s", snapPvc.Namespace, snapPvc.Name)
 
 		// check snapshot exists
 		var snap *ResticSnapshot = nil
-		for _, snp := range(*snapshotList) {
-			if snp.ShortId == snapPvc.SnapshotId {
-				snap = &snp
+		for i, snp := range snapshotList {
+			if snp.ShortID == snapPvc.SnapshotId {
+				snap = &snapshotList[i]
 				break
 			}
 		}
@@ -137,7 +137,7 @@ func restoreVolumes(
 		// create a pvc/pv to be restored
 		newPvc := &corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: snapPvc.Name,
+				Name:      snapPvc.Name,
 				Namespace: snapPvc.Namespace,
 			},
 			Spec: snapPvc.ClaimSpec,
@@ -158,7 +158,8 @@ func restoreVolumes(
 		b.Multiplier = 2.0
 		b.InitialInterval = time.Duration(5) * time.Second
 		chkPvcBound := func() error {
-			chkPvc, err := kubeClient.CoreV1().PersistentVolumeClaims(snapPvc.Namespace).Get(ctx, snapPvc.Name, metav1.GetOptions{})
+			chkPvc, err := kubeClient.CoreV1().PersistentVolumeClaims(snapPvc.Namespace).Get(
+				ctx, snapPvc.Name, metav1.GetOptions{})
 			if err != nil {
 				return backoff.Permanent(err)
 			}
@@ -178,7 +179,7 @@ func restoreVolumes(
 		}
 
 		// restic restore job
-		restoreJob := r.resticJobRestore(snapPvc.SnapshotId, snap.GetSourceVolumeId(), snapPvc.Name, snapPvc.Namespace)
+		restoreJob := r.resticJobRestore(snapPvc.SnapshotId, snap.GetSourceVolumeID(), snapPvc.Name, snapPvc.Namespace)
 		output, err = DoResticJob(ctx, restoreJob, kubeClient, 30)
 		if err != nil {
 			volumeRestoreFailedWith(
@@ -196,7 +197,7 @@ func restoreVolumes(
 	rlog.Infof("-- timestamp         : %s", restore.Status.RestoreTimestamp)
 	rlog.Infof("-- num volumes       : %d", restore.Status.NumVolumeClaims)
 	rlog.Infof("-- num failed volume : %d", restore.Status.NumFailedVolumeClaims)
-	for _, failed := range(restore.Status.FailedVolumeClaims) {
+	for _, failed := range restore.Status.FailedVolumeClaims {
 		rlog.Infof("----- %s", failed)
 	}
 
@@ -211,6 +212,6 @@ func volumeRestoreFailedWith(err error, restore *vsv1alpha1.VolumeRestore,
 	name, namespace string, rlog *utils.NamedLog) {
 
 	rlog.Warning(err.Error())
-	restore.Status.FailedVolumeClaims = append(restore.Status.FailedVolumeClaims, namespace + "/" + name + ":" + err.Error())
+	restore.Status.FailedVolumeClaims = append(restore.Status.FailedVolumeClaims, namespace+"/"+name+":"+err.Error())
 	restore.Status.NumFailedVolumeClaims++
 }

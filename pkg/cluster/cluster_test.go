@@ -10,9 +10,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/cenkalti/backoff"
-	corev1 "k8s.io/api/core/v1"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -21,17 +22,16 @@ import (
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	core "k8s.io/client-go/testing"
 	"k8s.io/klog"
-	"github.com/aws/aws-sdk-go/service/sts"
 
-	"github.com/ryo-watanabe/k8s-volume-snap/pkg/objectstore"
 	volumesnapshot "github.com/ryo-watanabe/k8s-volume-snap/pkg/apis/volumesnapshot/v1alpha1"
+	"github.com/ryo-watanabe/k8s-volume-snap/pkg/objectstore"
 )
 
 func TestCreateSnapshot(t *testing.T) {
 
 	// Init klog
 	klog.InitFlags(nil)
-	flag.Set("logtostderr", "true")
+	_ = flag.Set("logtostderr", "true")
 	flag.Parse()
 	klog.Infof("k8s-volume-snap pkg cluster test")
 	klog.Flush()
@@ -41,17 +41,17 @@ func TestCreateSnapshot(t *testing.T) {
 	notBoundedPVC.Status.Phase = "Lost"
 
 	cases := map[string]struct {
-		snap *volumesnapshot.VolumeSnapshot
+		snap          *volumesnapshot.VolumeSnapshot
 		omitClusterID bool
-		kubeobjects []runtime.Object
-		localobjects []runtime.Object
-		podLogs map[string]string
-		failedJob string
-		expSnap *volumesnapshot.VolumeSnapshot
-		snapedClaims []volumesnapshot.VolumeClaim
-		snapedStatus *volumesnapshot.VolumeSnapshotStatus
-		expMsg string
-		bucketErr error
+		kubeobjects   []runtime.Object
+		localobjects  []runtime.Object
+		podLogs       map[string]string
+		failedJob     string
+		expSnap       *volumesnapshot.VolumeSnapshot
+		snapedClaims  []volumesnapshot.VolumeClaim
+		snapedStatus  *volumesnapshot.VolumeSnapshotStatus
+		expMsg        string
+		bucketErr     error
 	}{
 		"Snapshot 1 PVC successfully": {
 			snap: newConfiguredSnapshot("test01", "InProgress"),
@@ -74,7 +74,7 @@ func TestCreateSnapshot(t *testing.T) {
 			snapedClaims: []volumesnapshot.VolumeClaim{
 				volumesnapshot.VolumeClaim{
 					Name: "TESTPVC", Namespace: "default",
-					ClaimSpec: corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV"},
+					ClaimSpec:  corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV"},
 					SnapshotId: "testSnapshotId", SnapshotSize: 131072, SnapshotReady: true,
 				},
 			},
@@ -105,7 +105,7 @@ func TestCreateSnapshot(t *testing.T) {
 			snapedClaims: []volumesnapshot.VolumeClaim{
 				volumesnapshot.VolumeClaim{
 					Name: "TESTPVC", Namespace: "default",
-					ClaimSpec: corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV"},
+					ClaimSpec:  corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV"},
 					SnapshotId: "testSnapshotId", SnapshotSize: 131072, SnapshotReady: true,
 				},
 			},
@@ -157,7 +157,7 @@ func TestCreateSnapshot(t *testing.T) {
 				ReadyVolumeClaims: 2, TotalBytes: 132096, TotalFiles: 160,
 			},
 		},
-		"Snapshot 1 PVC successfull and 1 not mounted": {
+		"Snapshot 1 PVC successful and 1 not mounted": {
 			snap: newConfiguredSnapshot("test01", "InProgress"),
 			localobjects: []runtime.Object{
 				newPodWithOwner("jobpod-list", "default", "restic-job-list-snapshots-test01"),
@@ -186,7 +186,7 @@ func TestCreateSnapshot(t *testing.T) {
 			},
 			snapedStatus: &volumesnapshot.VolumeSnapshotStatus{
 				Phase: "InProgress", NumVolumeClaims: 1, SkippedClaims: 1,
-				SkippedMessages: []string{"default/TESTPVC1 - PV not in use : Mount not found"},
+				SkippedMessages:   []string{"default/TESTPVC1 - PV not in use : Mount not found"},
 				ReadyVolumeClaims: 1, TotalBytes: 1024, TotalFiles: 32,
 			},
 		},
@@ -195,8 +195,8 @@ func TestCreateSnapshot(t *testing.T) {
 			localobjects: []runtime.Object{
 				newPodWithOwner("jobpod-list", "default", "restic-job-list-snapshots-test01"),
 			},
-			kubeobjects: []runtime.Object{ notBoundedPVC },
-			expSnap: newConfiguredSnapshot("test01", "InProgress"),
+			kubeobjects: []runtime.Object{notBoundedPVC},
+			expSnap:     newConfiguredSnapshot("test01", "InProgress"),
 			snapedStatus: &volumesnapshot.VolumeSnapshotStatus{
 				Phase: "InProgress", SkippedClaims: 1,
 				SkippedMessages: []string{"default/TESTPVC - PVC not bound"},
@@ -231,11 +231,11 @@ func TestCreateSnapshot(t *testing.T) {
 				"glob-TESTPV-TESTNODE01": "some grob error",
 			},
 			failedJob: "glob-TESTPV-TESTNODE01",
-			expSnap: newConfiguredSnapshot("test01", "InProgress"),
+			expSnap:   newConfiguredSnapshot("test01", "InProgress"),
 			snapedStatus: &volumesnapshot.VolumeSnapshotStatus{
 				Phase: "InProgress", SkippedClaims: 1,
 				SkippedMessages: []string{
-					"default/TESTPVC - Error globbing volume path : some grob error : "  +
+					"default/TESTPVC - Error globbing volume path : some grob error : " +
 						"Error doing restic job - Job glob-TESTPV-TESTNODE01 failed",
 				},
 			},
@@ -253,11 +253,11 @@ func TestCreateSnapshot(t *testing.T) {
 				newPodWithOwner("jobpod-backup", "default", "restic-job-backup-TESTPV"),
 			},
 			podLogs: map[string]string{
-				"glob-TESTPV-TESTNODE01": "/path/for/TESTPV",
+				"glob-TESTPV-TESTNODE01":   "/path/for/TESTPV",
 				"restic-job-backup-TESTPV": "some snapshot error",
 			},
 			failedJob: "restic-job-backup-TESTPV",
-			expSnap: newConfiguredSnapshot("test01", "InProgress"),
+			expSnap:   newConfiguredSnapshot("test01", "InProgress"),
 			snapedStatus: &volumesnapshot.VolumeSnapshotStatus{
 				Phase: "InProgress", SkippedClaims: 1,
 				SkippedMessages: []string{
@@ -279,7 +279,7 @@ func TestCreateSnapshot(t *testing.T) {
 				newPodWithOwner("jobpod-backup", "default", "restic-job-backup-TESTPV"),
 			},
 			podLogs: map[string]string{
-				"glob-TESTPV-TESTNODE01": "/path/for/TESTPV",
+				"glob-TESTPV-TESTNODE01":   "/path/for/TESTPV",
 				"restic-job-backup-TESTPV": "not JSON string",
 			},
 			expSnap: newConfiguredSnapshot("test01", "InProgress"),
@@ -292,19 +292,19 @@ func TestCreateSnapshot(t *testing.T) {
 			},
 		},
 		"ClusterID not found": {
-			snap: newConfiguredSnapshot("test01", "InProgress"),
+			snap:          newConfiguredSnapshot("test01", "InProgress"),
 			omitClusterID: true,
-			expMsg: "Getting clusterId(=kube-system UID) failed",
+			expMsg:        "Getting clusterId(=kube-system UID) failed",
 		},
 		"Assume role perm error": {
-			snap: newConfiguredSnapshot("test01", "InProgress"),
+			snap:      newConfiguredSnapshot("test01", "InProgress"),
 			bucketErr: fmt.Errorf("InvalidAccessKeyId"),
-			expMsg: "Getting temporaly credentials failed (do not retry)",
+			expMsg:    "Getting temporaly credentials failed (do not retry)",
 		},
 		"Assume role not perm error": {
-			snap: newConfiguredSnapshot("test01", "InProgress"),
+			snap:      newConfiguredSnapshot("test01", "InProgress"),
 			bucketErr: fmt.Errorf("some bucket error"),
-			expMsg: "Getting temporaly credentials failed (do retry)",
+			expMsg:    "Getting temporaly credentials failed (do retry)",
 		},
 		"List snapshot error": {
 			snap: newConfiguredSnapshot("test01", "InProgress"),
@@ -315,7 +315,7 @@ func TestCreateSnapshot(t *testing.T) {
 				"restic-job-list-snapshots-test01": "some list snapshot error",
 			},
 			failedJob: "restic-job-list-snapshots-test01",
-			expMsg: "Checking repository failed",
+			expMsg:    "Checking repository failed",
 		},
 		"Create restic repository (error)": {
 			snap: newConfiguredSnapshot("test01", "InProgress"),
@@ -324,16 +324,16 @@ func TestCreateSnapshot(t *testing.T) {
 				newPodWithOwner("jobpod-init-repo", "default", "restic-job-init-repo-TESTCLUSTERID"),
 			},
 			podLogs: map[string]string{
-				"restic-job-list-snapshots-test01": "specified key does not exist",
+				"restic-job-list-snapshots-test01":   "specified key does not exist",
 				"restic-job-init-repo-TESTCLUSTERID": "some create repo error",
 			},
 			failedJob: "all",
-			expMsg: "Error doing restic job - Job restic-job-init-repo-TESTCLUSTERID failed",
+			expMsg:    "Error doing restic job - Job restic-job-init-repo-TESTCLUSTERID failed",
 		},
 	}
 
 	// Do test cases
-	for name, c := range(cases) {
+	for name, c := range cases {
 		t.Logf("Test case : %s", name)
 		clusterID := "TESTCLUSTERID"
 		if c.omitClusterID {
@@ -365,32 +365,32 @@ func TestCreateSnapshot(t *testing.T) {
 func TestRestore(t *testing.T) {
 
 	cases := map[string]struct {
-		restore *volumesnapshot.VolumeRestore
-		snap *volumesnapshot.VolumeSnapshot
-		snapClaims []volumesnapshot.VolumeClaim
-		kubeobjects []runtime.Object
-		localobjects []runtime.Object
-		podLogs map[string]string
-		failedJob string
-		expRestore *volumesnapshot.VolumeRestore
+		restore       *volumesnapshot.VolumeRestore
+		snap          *volumesnapshot.VolumeSnapshot
+		snapClaims    []volumesnapshot.VolumeClaim
+		kubeobjects   []runtime.Object
+		localobjects  []runtime.Object
+		podLogs       map[string]string
+		failedJob     string
+		expRestore    *volumesnapshot.VolumeRestore
 		restoreStatus *volumesnapshot.VolumeRestoreStatus
 		omitClusterID bool
-		expMsg string
-		bucketErr error
-		pvcPhase string
+		expMsg        string
+		bucketErr     error
+		pvcPhase      string
 	}{
 		"Restore 2 PVCs successfully": {
 			restore: newConfiguredRestore("test01", "test01", "InProgress"),
-			snap: newConfiguredSnapshot("test01", "Completed"),
+			snap:    newConfiguredSnapshot("test01", "Completed"),
 			snapClaims: []volumesnapshot.VolumeClaim{
 				volumesnapshot.VolumeClaim{
 					Name: "TESTPVC1", Namespace: "default",
-					ClaimSpec: corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV1"},
+					ClaimSpec:  corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV1"},
 					SnapshotId: "testSnapshotId1", SnapshotSize: 131072, SnapshotReady: true,
 				},
 				volumesnapshot.VolumeClaim{
 					Name: "TESTPVC2", Namespace: "default",
-					ClaimSpec: corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV2"},
+					ClaimSpec:  corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV2"},
 					SnapshotId: "testSnapshotId2", SnapshotSize: 1024, SnapshotReady: true,
 				},
 			},
@@ -403,13 +403,13 @@ func TestRestore(t *testing.T) {
 			},
 			podLogs: map[string]string{
 				"restic-job-list-snapshots-test01": "[{" +
-						"\"short_id\":\"testSnapshotId1\"," +
-						"\"time\":\"2021-01-01T12:00:00.00Z\"," +
-						"\"paths\":[\"TESTCLUSTERUID/TESTPVC1UID\"]" +
+					"\"short_id\":\"testSnapshotId1\"," +
+					"\"time\":\"2021-01-01T12:00:00.00Z\"," +
+					"\"paths\":[\"TESTCLUSTERUID/TESTPVC1UID\"]" +
 					"},{" +
-						"\"short_id\":\"testSnapshotId2\"," +
-						"\"time\":\"2021-01-01T12:00:00.00Z\"," +
-						"\"paths\":[\"TESTCLUSTERUID/TESTPVC2UID\"]" +
+					"\"short_id\":\"testSnapshotId2\"," +
+					"\"time\":\"2021-01-01T12:00:00.00Z\"," +
+					"\"paths\":[\"TESTCLUSTERUID/TESTPVC2UID\"]" +
 					"}]",
 			},
 			expRestore: newConfiguredRestore("test01", "test01", "InProgress"),
@@ -418,20 +418,20 @@ func TestRestore(t *testing.T) {
 			},
 		},
 		"ClusterID not found": {
-			restore: newConfiguredRestore("test01", "test01", "InProgress"),
-			snap: newConfiguredSnapshot("test01", "InProgress"),
+			restore:       newConfiguredRestore("test01", "test01", "InProgress"),
+			snap:          newConfiguredSnapshot("test01", "InProgress"),
 			omitClusterID: true,
-			expMsg: "Getting clusterId(=kube-system UID) failed",
+			expMsg:        "Getting clusterId(=kube-system UID) failed",
 		},
 		"Assume role error": {
-			restore: newConfiguredRestore("test01", "test01", "InProgress"),
-			snap: newConfiguredSnapshot("test01", "InProgress"),
+			restore:   newConfiguredRestore("test01", "test01", "InProgress"),
+			snap:      newConfiguredSnapshot("test01", "InProgress"),
 			bucketErr: fmt.Errorf("InvalidAccessKeyId"),
-			expMsg: "Getting temporaly credentials failed",
+			expMsg:    "Getting temporaly credentials failed",
 		},
 		"List snapshot error": {
 			restore: newConfiguredRestore("test01", "test01", "InProgress"),
-			snap: newConfiguredSnapshot("test01", "InProgress"),
+			snap:    newConfiguredSnapshot("test01", "InProgress"),
 			localobjects: []runtime.Object{
 				newPodWithOwner("jobpod-list", "default", "restic-job-list-snapshots-test01"),
 			},
@@ -439,11 +439,11 @@ func TestRestore(t *testing.T) {
 				"restic-job-list-snapshots-test01": "some list snapshot error",
 			},
 			failedJob: "restic-job-list-snapshots-test01",
-			expMsg: "List snapshots failed",
+			expMsg:    "List snapshots failed",
 		},
 		"List snapshot parse error": {
 			restore: newConfiguredRestore("test01", "test01", "InProgress"),
-			snap: newConfiguredSnapshot("test01", "InProgress"),
+			snap:    newConfiguredSnapshot("test01", "InProgress"),
 			localobjects: []runtime.Object{
 				newPodWithOwner("jobpod-list", "default", "restic-job-list-snapshots-test01"),
 			},
@@ -454,11 +454,11 @@ func TestRestore(t *testing.T) {
 		},
 		"Restore 1 PVC error snapshot not found": {
 			restore: newConfiguredRestore("test01", "test01", "InProgress"),
-			snap: newConfiguredSnapshot("test01", "Completed"),
+			snap:    newConfiguredSnapshot("test01", "Completed"),
 			snapClaims: []volumesnapshot.VolumeClaim{
 				volumesnapshot.VolumeClaim{
 					Name: "TESTPVC1", Namespace: "default",
-					ClaimSpec: corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV1"},
+					ClaimSpec:  corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV1"},
 					SnapshotId: "testSnapshotId1", SnapshotSize: 131072, SnapshotReady: true,
 				},
 			},
@@ -476,11 +476,11 @@ func TestRestore(t *testing.T) {
 		},
 		"Restore 1 PVC error create PVC": {
 			restore: newConfiguredRestore("test01", "test01", "InProgress"),
-			snap: newConfiguredSnapshot("test01", "Completed"),
+			snap:    newConfiguredSnapshot("test01", "Completed"),
 			snapClaims: []volumesnapshot.VolumeClaim{
 				volumesnapshot.VolumeClaim{
 					Name: "TESTPVC1", Namespace: "default",
-					ClaimSpec: corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV1"},
+					ClaimSpec:  corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV1"},
 					SnapshotId: "testSnapshotId1", SnapshotSize: 131072, SnapshotReady: true,
 				},
 			},
@@ -492,24 +492,26 @@ func TestRestore(t *testing.T) {
 			},
 			podLogs: map[string]string{
 				"restic-job-list-snapshots-test01": "[{" +
-						"\"short_id\":\"testSnapshotId1\"," +
-						"\"time\":\"2021-01-01T12:00:00.00Z\"," +
-						"\"paths\":[\"TESTCLUSTERUID/TESTPVC1UID\"]" +
+					"\"short_id\":\"testSnapshotId1\"," +
+					"\"time\":\"2021-01-01T12:00:00.00Z\"," +
+					"\"paths\":[\"TESTCLUSTERUID/TESTPVC1UID\"]" +
 					"}]",
 			},
 			expRestore: newConfiguredRestore("test01", "test01", "InProgress"),
 			restoreStatus: &volumesnapshot.VolumeRestoreStatus{
 				Phase: "InProgress", NumVolumeClaims: 1, NumFailedVolumeClaims: 1,
-				FailedVolumeClaims: []string{"default/TESTPVC1:Creating PVC failed : persistentvolumeclaims \"TESTPVC1\" already exists"},
+				FailedVolumeClaims: []string{
+					"default/TESTPVC1:Creating PVC failed : persistentvolumeclaims \"TESTPVC1\" already exists",
+				},
 			},
 		},
 		"Restore 1 PVC error bound PVC": {
 			restore: newConfiguredRestore("test01", "test01", "InProgress"),
-			snap: newConfiguredSnapshot("test01", "Completed"),
+			snap:    newConfiguredSnapshot("test01", "Completed"),
 			snapClaims: []volumesnapshot.VolumeClaim{
 				volumesnapshot.VolumeClaim{
 					Name: "TESTPVC1", Namespace: "default",
-					ClaimSpec: corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV1"},
+					ClaimSpec:  corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV1"},
 					SnapshotId: "testSnapshotId1", SnapshotSize: 131072, SnapshotReady: true,
 				},
 			},
@@ -519,9 +521,9 @@ func TestRestore(t *testing.T) {
 			pvcPhase: "Lost",
 			podLogs: map[string]string{
 				"restic-job-list-snapshots-test01": "[{" +
-						"\"short_id\":\"testSnapshotId1\"," +
-						"\"time\":\"2021-01-01T12:00:00.00Z\"," +
-						"\"paths\":[\"TESTCLUSTERUID/TESTPVC1UID\"]" +
+					"\"short_id\":\"testSnapshotId1\"," +
+					"\"time\":\"2021-01-01T12:00:00.00Z\"," +
+					"\"paths\":[\"TESTCLUSTERUID/TESTPVC1UID\"]" +
 					"}]",
 			},
 			expRestore: newConfiguredRestore("test01", "test01", "InProgress"),
@@ -532,11 +534,11 @@ func TestRestore(t *testing.T) {
 		},
 		"Restore 1 PVC error restore": {
 			restore: newConfiguredRestore("test01", "test01", "InProgress"),
-			snap: newConfiguredSnapshot("test01", "Completed"),
+			snap:    newConfiguredSnapshot("test01", "Completed"),
 			snapClaims: []volumesnapshot.VolumeClaim{
 				volumesnapshot.VolumeClaim{
 					Name: "TESTPVC1", Namespace: "default",
-					ClaimSpec: corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV1"},
+					ClaimSpec:  corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV1"},
 					SnapshotId: "testSnapshotId1", SnapshotSize: 131072, SnapshotReady: true,
 				},
 			},
@@ -549,9 +551,9 @@ func TestRestore(t *testing.T) {
 			failedJob: "restic-job-restore-testSnapshotId1",
 			podLogs: map[string]string{
 				"restic-job-list-snapshots-test01": "[{" +
-						"\"short_id\":\"testSnapshotId1\"," +
-						"\"time\":\"2021-01-01T12:00:00.00Z\"," +
-						"\"paths\":[\"TESTCLUSTERUID/TESTPVC1UID\"]" +
+					"\"short_id\":\"testSnapshotId1\"," +
+					"\"time\":\"2021-01-01T12:00:00.00Z\"," +
+					"\"paths\":[\"TESTCLUSTERUID/TESTPVC1UID\"]" +
 					"}]",
 				"restic-job-restore-testSnapshotId1": "some restore error",
 			},
@@ -560,15 +562,15 @@ func TestRestore(t *testing.T) {
 				Phase: "InProgress", NumVolumeClaims: 1, NumFailedVolumeClaims: 1,
 				FailedVolumeClaims: []string{
 					"default/TESTPVC1:Error running restore snapshot job : " +
-					"some restore error : Error doing restic job - " +
-					"Job restic-job-restore-testSnapshotId1 failed : ",
+						"some restore error : Error doing restic job - " +
+						"Job restic-job-restore-testSnapshotId1 failed : ",
 				},
 			},
 		},
 	}
 
 	// Do test cases
-	for name, c := range(cases) {
+	for name, c := range cases {
 		t.Logf("Test case : %s", name)
 		clusterID := "TESTCLUSTERID"
 		if c.omitClusterID {
@@ -600,25 +602,25 @@ func TestRestore(t *testing.T) {
 func TestDeleteSnapshot(t *testing.T) {
 
 	cases := map[string]struct {
-		snap *volumesnapshot.VolumeSnapshot
-		snapClaims []volumesnapshot.VolumeClaim
+		snap         *volumesnapshot.VolumeSnapshot
+		snapClaims   []volumesnapshot.VolumeClaim
 		localobjects []runtime.Object
-		podLogs map[string]string
-		failedJob string
-		expMsg string
-		bucketErr error
+		podLogs      map[string]string
+		failedJob    string
+		expMsg       string
+		bucketErr    error
 	}{
 		"Delete 2 volume snapshots successfully": {
 			snap: newConfiguredSnapshot("test01", "Completed"),
 			snapClaims: []volumesnapshot.VolumeClaim{
 				volumesnapshot.VolumeClaim{
 					Name: "TESTPVC1", Namespace: "default",
-					ClaimSpec: corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV1"},
+					ClaimSpec:  corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV1"},
 					SnapshotId: "testSnapshotId1", SnapshotSize: 131072, SnapshotReady: true,
 				},
 				volumesnapshot.VolumeClaim{
 					Name: "TESTPVC2", Namespace: "default",
-					ClaimSpec: corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV2"},
+					ClaimSpec:  corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV2"},
 					SnapshotId: "testSnapshotId2", SnapshotSize: 1024, SnapshotReady: true,
 				},
 			},
@@ -629,13 +631,13 @@ func TestDeleteSnapshot(t *testing.T) {
 			},
 			podLogs: map[string]string{
 				"restic-job-list-snapshots-test01": "[{" +
-						"\"short_id\":\"testSnapshotId1\"," +
-						"\"time\":\"2021-01-01T12:00:00.00Z\"," +
-						"\"paths\":[\"TESTCLUSTERUID/TESTPVC1UID\"]" +
+					"\"short_id\":\"testSnapshotId1\"," +
+					"\"time\":\"2021-01-01T12:00:00.00Z\"," +
+					"\"paths\":[\"TESTCLUSTERUID/TESTPVC1UID\"]" +
 					"},{" +
-						"\"short_id\":\"testSnapshotId2\"," +
-						"\"time\":\"2021-01-01T12:00:00.00Z\"," +
-						"\"paths\":[\"TESTCLUSTERUID/TESTPVC2UID\"]" +
+					"\"short_id\":\"testSnapshotId2\"," +
+					"\"time\":\"2021-01-01T12:00:00.00Z\"," +
+					"\"paths\":[\"TESTCLUSTERUID/TESTPVC2UID\"]" +
 					"}]",
 			},
 		},
@@ -648,7 +650,7 @@ func TestDeleteSnapshot(t *testing.T) {
 				"restic-job-list-snapshots-test01": "some list snapshot error",
 			},
 			failedJob: "restic-job-list-snapshots-test01",
-			expMsg: "List snapshots failed",
+			expMsg:    "List snapshots failed",
 		},
 		"List snapshot parse error": {
 			snap: newConfiguredSnapshot("test01", "InProgress"),
@@ -665,7 +667,7 @@ func TestDeleteSnapshot(t *testing.T) {
 			snapClaims: []volumesnapshot.VolumeClaim{
 				volumesnapshot.VolumeClaim{
 					Name: "TESTPVC1", Namespace: "default",
-					ClaimSpec: corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV1"},
+					ClaimSpec:  corev1.PersistentVolumeClaimSpec{VolumeName: "TESTPV1"},
 					SnapshotId: "testSnapshotId1", SnapshotSize: 131072, SnapshotReady: true,
 				},
 			},
@@ -675,14 +677,14 @@ func TestDeleteSnapshot(t *testing.T) {
 			},
 			podLogs: map[string]string{
 				"restic-job-list-snapshots-test01": "[{" +
-						"\"short_id\":\"testSnapshotId1\"," +
-						"\"time\":\"2021-01-01T12:00:00.00Z\"," +
-						"\"paths\":[\"TESTCLUSTERUID/TESTPVC1UID\"]" +
+					"\"short_id\":\"testSnapshotId1\"," +
+					"\"time\":\"2021-01-01T12:00:00.00Z\"," +
+					"\"paths\":[\"TESTCLUSTERUID/TESTPVC1UID\"]" +
 					"}]",
 				"restic-job-delete-testSnapshotId1": "some delete error",
 			},
 			failedJob: "restic-job-delete-testSnapshotId1",
-			expMsg: "Error running delete snapshot job : some delete error",
+			expMsg:    "Error running delete snapshot job : some delete error",
 		},
 		"Bucket delete error": {
 			snap: newConfiguredSnapshot("test01", "InProgress"),
@@ -693,12 +695,12 @@ func TestDeleteSnapshot(t *testing.T) {
 				"restic-job-list-snapshots-test01": "[]",
 			},
 			bucketErr: fmt.Errorf("some bucket delete error"),
-			expMsg: "Deleting tgz file failed : some bucket delete error",
+			expMsg:    "Deleting tgz file failed : some bucket delete error",
 		},
 	}
 
 	// Do test cases
-	for name, c := range(cases) {
+	for name, c := range cases {
 		t.Logf("Test case : %s", name)
 		localKubeClient := initKubeClient(c.localobjects, "LOCALCLUSTERID", c.failedJob, "")
 		bucket := &bucketMock{}
@@ -764,9 +766,9 @@ func (b *bucketMock) CreateAssumeRole(clusterID string,
 		return nil, bucketErr
 	}
 	return &sts.Credentials{
-		AccessKeyId: &accesskey,
+		AccessKeyId:     &accesskey,
 		SecretAccessKey: &secretkey,
-		SessionToken: &sessiontoken,
+		SessionToken:    &sessiontoken,
 	}, nil
 }
 
@@ -813,7 +815,7 @@ func (b bucketMock) GetObjectInfo(filename string) (*objectstore.ObjectInfo, err
 
 // Mock k8s API
 
-func initKubeClient(objects []runtime.Object, clusterID string, failedJob, pvcPhase string) (kubernetes.Interface) {
+func initKubeClient(objects []runtime.Object, clusterID string, failedJob, pvcPhase string) kubernetes.Interface {
 
 	// test k8s
 	kubeobjects := []runtime.Object{}
@@ -840,16 +842,17 @@ func initKubeClient(objects []runtime.Object, clusterID string, failedJob, pvcPh
 	})
 
 	// create PVC reaction
-	kubeClient.Fake.PrependReactor("create", "persistentvolumeclaims", func(action core.Action) (bool, runtime.Object, error) {
-		obj := action.(core.CreateAction).GetObject()
-		pvc, _ := obj.(*corev1.PersistentVolumeClaim)
-		if pvcPhase == "" {
-			pvc.Status.Phase = "Bound"
-		} else {
-			pvc.Status.Phase = "Lost"
-		}
-		return false, pvc, nil
-	})
+	kubeClient.Fake.PrependReactor("create", "persistentvolumeclaims",
+		func(action core.Action) (bool, runtime.Object, error) {
+			obj := action.(core.CreateAction).GetObject()
+			pvc, _ := obj.(*corev1.PersistentVolumeClaim)
+			if pvcPhase == "" {
+				pvc.Status.Phase = "Bound"
+			} else {
+				pvc.Status.Phase = "Lost"
+			}
+			return false, pvc, nil
+		})
 
 	return kubeClient
 }
@@ -886,7 +889,7 @@ func newConfiguredSnapshot(name, phase string) *volumesnapshot.VolumeSnapshot {
 
 func snapshotCopyTimestamps(src, dst *volumesnapshot.VolumeSnapshot) {
 	if len(dst.Spec.VolumeClaims) == len(src.Spec.VolumeClaims) {
-		for i, _ := range(dst.Spec.VolumeClaims) {
+		for i := range dst.Spec.VolumeClaims {
 			dst.Spec.VolumeClaims[i].SnapshotTime = src.Spec.VolumeClaims[i].SnapshotTime
 		}
 	}
@@ -902,9 +905,9 @@ func newConfiguredRestore(name, snapshot, phase string) *volumesnapshot.VolumeRe
 			Namespace: metav1.NamespaceDefault,
 		},
 		Spec: volumesnapshot.VolumeRestoreSpec{
-			ClusterName:           name,
-			Kubeconfig:            "kubeconfig",
-			VolumeSnapshotName:    snapshot,
+			ClusterName:        name,
+			Kubeconfig:         "kubeconfig",
+			VolumeSnapshotName: snapshot,
 		},
 		Status: volumesnapshot.VolumeRestoreStatus{
 			Phase: phase,
@@ -916,7 +919,7 @@ func newPV(name, claimns, claimname string) *corev1.PersistentVolume {
 	return &corev1.PersistentVolume{
 		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "PersistentVolume"},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:     name,
+			Name: name,
 		},
 		Spec: corev1.PersistentVolumeSpec{
 			ClaimRef: &corev1.ObjectReference{Namespace: claimns, Name: claimname},
@@ -941,7 +944,7 @@ func newPVC(ns, name, pvname string) *corev1.PersistentVolumeClaim {
 			Namespace: ns,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
-			VolumeName:       pvname,
+			VolumeName: pvname,
 		},
 		Status: corev1.PersistentVolumeClaimStatus{
 			Phase: "Bound",
@@ -953,7 +956,7 @@ func newAttachment(name, node, pvname string) *storagev1.VolumeAttachment {
 	return &storagev1.VolumeAttachment{
 		TypeMeta: metav1.TypeMeta{APIVersion: "storage/v1", Kind: "VolumeAttachment"},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:     name,
+			Name: name,
 		},
 		Spec: storagev1.VolumeAttachmentSpec{
 			Source: storagev1.VolumeAttachmentSource{
@@ -980,7 +983,7 @@ func newPodWithPVC(ns, name, pvcname, nodename string) *corev1.Pod {
 				corev1.Container{
 					VolumeMounts: []corev1.VolumeMount{
 						corev1.VolumeMount{
-							Name: "mnt",
+							Name:      "mnt",
 							MountPath: "/mnt",
 						},
 					},

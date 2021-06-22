@@ -27,7 +27,7 @@ const crPath = "crs/"
 type Objectstore interface {
 	ChkBucket() (bool, error)
 	CreateBucket() error
-	CreateAssumeRole(clusterId string, durationSeconds int64) (*sts.Credentials, error)
+	CreateAssumeRole(clusterID string, durationSeconds int64) (*sts.Credentials, error)
 
 	Upload(file *os.File, filename string) error
 	Download(file *os.File, filename string) error
@@ -130,7 +130,7 @@ func (b *Bucket) setSession() (*session.Session, error) {
 	var client *http.Client
 	if b.insecure {
 		tr := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
 		}
 		client = &http.Client{Transport: tr}
 	} else {
@@ -213,7 +213,7 @@ const policyString = `{
 }`
 
 // CreateAssumeRole creates temporaly credentials for a path(=clusterId) in the bucket
-func (b *Bucket) CreateAssumeRole(clusterId string, durationSeconds int64) (*sts.Credentials, error) {
+func (b *Bucket) CreateAssumeRole(clusterID string, durationSeconds int64) (*sts.Credentials, error) {
 	// set session
 	sess, err := b.setSession()
 	if err != nil {
@@ -223,7 +223,7 @@ func (b *Bucket) CreateAssumeRole(clusterId string, durationSeconds int64) (*sts
 	svc := b.newSTSfunc(sess)
 
 	policy := strings.ReplaceAll(policyString, "BUCKET_NAME", b.BucketName)
-	policy = strings.ReplaceAll(policy, "PATH_FOR_CLUSTER_ID", clusterId)
+	policy = strings.ReplaceAll(policy, "PATH_FOR_CLUSTER_ID", clusterID)
 	policy = strings.Replace(policy, "\n", "", -1)
 	policy = strings.Replace(policy, "\t", "", -1)
 	klog.Infof("Creating AssumeRole policy:%s", policy)

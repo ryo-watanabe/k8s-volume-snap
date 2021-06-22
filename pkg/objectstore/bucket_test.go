@@ -23,7 +23,7 @@ func TestGetBucket(t *testing.T) {
 
 	// Init klog
 	klog.InitFlags(nil)
-	flag.Set("logtostderr", "true")
+	_ = flag.Set("logtostderr", "true")
 	flag.Parse()
 	klog.Infof("k8s-volume-snap/pkg/objectstore test")
 	klog.Flush()
@@ -89,7 +89,7 @@ func TestCreateBucket(t *testing.T) {
 		"https://endpoint.net", "region", "k8s-volume-snap", true)
 
 	// Create Bucket
-	b.CreateBucket()
+	_ = b.CreateBucket()
 	if createdBucketName != "k8s-volume-snap" {
 		t.Errorf("Error in Created Bucket name")
 	}
@@ -107,7 +107,7 @@ func TestAssumeRole(t *testing.T) {
 		"https://endpoint.net", "region", "k8s-volume-snap", true)
 
 	// AssumeRole
-	b.CreateAssumeRole("clusterid", 999)
+	_, _ = b.CreateAssumeRole("clusterid", 999)
 	mockPolicyString := `{
 		"Version":"2012-10-17",
 		"Statement":[
@@ -157,11 +157,11 @@ func TestUpload(t *testing.T) {
 		"https://endpoint.net", "region", "k8s-volume-snap", true)
 
 	// Upload a file
-	b.Upload(nil, "UPLOAD_FILENAME")
+	_ = b.Upload(nil, "UPLOAD_FILENAME")
 	if uploadBucketName != "k8s-volume-snap" {
 		t.Errorf("Error in Upload Bucket name")
 	}
-	if uploadKey != crPath + "UPLOAD_FILENAME" {
+	if uploadKey != crPath+"UPLOAD_FILENAME" {
 		t.Errorf("Error in Upload Key")
 	}
 
@@ -178,11 +178,11 @@ func TestDownload(t *testing.T) {
 		"https://endpoint.net", "region", "k8s-volume-snap", true)
 
 	// Download a file
-	b.Download(nil, "DOWNLOAD_FILENAME")
+	_ = b.Download(nil, "DOWNLOAD_FILENAME")
 	if downloadBucketName != "k8s-volume-snap" {
 		t.Errorf("Error in Download Bucket name")
 	}
-	if downloadKey != crPath + "DOWNLOAD_FILENAME" {
+	if downloadKey != crPath+"DOWNLOAD_FILENAME" {
 		t.Errorf("Error in Download Key")
 	}
 
@@ -198,19 +198,18 @@ func TestDelete(t *testing.T) {
 	b := NewMockBucket("test", "ACCESSKEY", "SECRETKEY", "ROLEARN",
 		"https://endpoint.net", "region", "k8s-volume-snap", true)
 
-
 	// Delete a file
-	b.Delete("DELETE_FILENAME")
+	_ = b.Delete("DELETE_FILENAME")
 	if deleteObjectBucketName != "k8s-volume-snap" {
 		t.Errorf("Error in Delete Object Bucket name")
 	}
-	if deleteObjectKey != crPath + "DELETE_FILENAME" {
+	if deleteObjectKey != crPath+"DELETE_FILENAME" {
 		t.Errorf("Error in Delete Object Key")
 	}
 	if headObjectBucketName != "k8s-volume-snap" {
 		t.Errorf("Error in head Object Bucket name")
 	}
-	if headObjectKey != crPath + "DELETE_FILENAME" {
+	if headObjectKey != crPath+"DELETE_FILENAME" {
 		t.Errorf("Error in head Object Key")
 	}
 
@@ -237,7 +236,7 @@ func TestGetInfo(t *testing.T) {
 	if listObjectsBucketName != "k8s-volume-snap" {
 		t.Errorf("Error in list Object Bucket name")
 	}
-	if listObjectsPrefix != crPath + "GETINFO_FILENAME" {
+	if listObjectsPrefix != crPath+"GETINFO_FILENAME" {
 		t.Errorf("Error in list Object Prefix")
 	}
 	if err == nil {
@@ -320,6 +319,7 @@ func chkErr(t *testing.T, exp, got error) {
 		t.Errorf("Error not matched\nexpected : %v\nbut got  : %v", exp, got)
 	}
 }
+
 // Mock interfaces
 
 type mockS3Client struct {
@@ -424,7 +424,8 @@ type mockUploader struct {
 var uploadBucketName string
 var uploadKey string
 
-func (m mockUploader) Upload(input *s3manager.UploadInput, options ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
+func (m mockUploader) Upload(input *s3manager.UploadInput,
+	options ...func(*s3manager.Uploader)) (*s3manager.UploadOutput, error) {
 	uploadBucketName = *input.Bucket
 	uploadKey = *input.Key
 	if mockErr != nil {
@@ -446,7 +447,8 @@ type mockDownloader struct {
 var downloadBucketName string
 var downloadKey string
 
-func (m mockDownloader) Download(w io.WriterAt, input *s3.GetObjectInput, options ...func(*s3manager.Downloader)) (int64, error) {
+func (m mockDownloader) Download(w io.WriterAt, input *s3.GetObjectInput,
+	options ...func(*s3manager.Downloader)) (int64, error) {
 	downloadBucketName = *input.Bucket
 	downloadKey = *input.Key
 	if mockErr != nil {

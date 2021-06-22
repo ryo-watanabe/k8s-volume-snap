@@ -2,8 +2,8 @@ package cluster
 
 import (
 	"context"
-	"fmt"
 	"encoding/json"
+	"fmt"
 
 	"k8s.io/client-go/kubernetes"
 
@@ -31,13 +31,13 @@ func deleteVolumeSnapshots(
 	dlog := utils.NewNamedLog("delete:" + snapshot.ObjectMeta.Name)
 
 	// clusterId
-	clusterId := snapshot.Spec.ClusterId
-	resticPassword := utils.MakePassword(clusterId, 16)
+	clusterID := snapshot.Spec.ClusterId
+	resticPassword := utils.MakePassword(clusterID, 16)
 
 	dlog.Infof("Deleting snapshot")
 
 	// prepare admin restic
-	adminRestic := NewRestic(bucket.GetEndpoint(), bucket.GetBucketName(), clusterId, resticPassword,
+	adminRestic := NewRestic(bucket.GetEndpoint(), bucket.GetBucketName(), clusterID, resticPassword,
 		bucket.GetAccessKey(), bucket.GetSecretKey(), "",
 		snapshot.GetNamespace(), snapshot.GetName())
 
@@ -49,22 +49,22 @@ func deleteVolumeSnapshots(
 	}
 	// Perse snapshot list
 	jsonBytes := []byte(output)
-	snapshotList := new([]ResticSnapshot)
-	err = json.Unmarshal(jsonBytes, snapshotList)
+	snapshotList := []ResticSnapshot{}
+	err = json.Unmarshal(jsonBytes, &snapshotList)
 	if err != nil {
 		return fmt.Errorf("Error persing restic snapshot : %s : %s", err.Error(), output)
 	}
 
 	// delete volumes
-	for _, snapPvc := range(snapshot.Spec.VolumeClaims) {
+	for _, snapPvc := range snapshot.Spec.VolumeClaims {
 
 		dlog.Infof(" - PVC : %s/%s", snapPvc.Namespace, snapPvc.Name)
 
 		// check snapshot exists
 		var snap *ResticSnapshot = nil
-		for _, snp := range(*snapshotList) {
-			if snp.ShortId == snapPvc.SnapshotId {
-				snap = &snp
+		for i, snp := range snapshotList {
+			if snp.ShortID == snapPvc.SnapshotId {
+				snap = &snapshotList[i]
 				break
 			}
 		}
