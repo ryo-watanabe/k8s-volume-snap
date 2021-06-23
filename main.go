@@ -35,7 +35,7 @@ import (
 )
 
 var (
-	masterURL         string
+	masterURL          string
 	kubeconfig         string
 	namespace          string
 	snapshotthreads    int
