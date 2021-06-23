@@ -5,6 +5,9 @@ run:
 skip-dirs:
   - pkg/client
 
+skip-files:
+  - pkg/client/.*fake_.*.go
+
 linters:
   disable-all: true
   enable:
