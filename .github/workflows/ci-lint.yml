@@ -19,7 +19,7 @@ jobs:
   ci-lint:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
-    container: golangci/golangci-lint:v1.41.1
+    container: golangci/golangci-lint:v1.19.1
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
