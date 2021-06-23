@@ -61,7 +61,7 @@ func deleteVolumeSnapshots(
 		dlog.Infof(" - PVC : %s/%s", snapPvc.Namespace, snapPvc.Name)
 
 		// check snapshot exists
-		var snap *ResticSnapshot = nil
+		var snap *ResticSnapshot
 		for i, snp := range snapshotList {
 			if snp.ShortID == snapPvc.SnapshotId {
 				snap = &snapshotList[i]
