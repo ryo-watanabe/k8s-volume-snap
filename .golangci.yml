@@ -20,12 +20,12 @@ linters:
     - govet
     - lll
     - misspell
-    - staticcheck
-    - structcheck
-    - typecheck
-    - unused
-    - varcheck
-    - prealloc
+    #- staticcheck
+    #- structcheck
+    #- typecheck
+    #- unused
+    #- varcheck
+    #- prealloc
 
 issues:
   exclude-use-default: false
