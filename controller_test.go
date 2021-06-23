@@ -484,7 +484,10 @@ func filterInformerActions(actions []core.Action) []core.Action {
 		if action.Matches("get", "objectstoreconfigs") ||
 			action.Matches("list", "volumesnapshots") ||
 			action.Matches("get", "volumesnapshots") ||
-			action.Matches("watch", "volumesnapshots") {
+			action.Matches("watch", "volumesnapshots") ||
+			action.Matches("list", "volumerestores") ||
+			action.Matches("get", "volumerestores") ||
+			action.Matches("watch", "volumerestores") {
 			continue
 		}
 		ret = append(ret, action)
