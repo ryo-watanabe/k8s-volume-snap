@@ -2,12 +2,6 @@ run:
   concurrency: 4
   timeout: 10m
 
-skip-dirs:
-  - pkg/client
-
-skip-files:
-  - pkg/client/.*fake_.*.go
-
 linters:
   disable-all: true
   enable:
@@ -20,12 +14,12 @@ linters:
     - govet
     - lll
     - misspell
-    #- staticcheck
-    #- structcheck
-    #- typecheck
-    #- unused
-    #- varcheck
-    #- prealloc
+    - staticcheck
+    - structcheck
+    - typecheck
+    - unused
+    - varcheck
+    - prealloc
 
 issues:
   exclude-use-default: false

@@ -28,4 +28,6 @@ jobs:
 
       # Runs a single command using the runners shell
       - name: Run golanci-lint
-        run: golangci-lint run -v
+        run: |
+          go mod vendor
+          golangci-lint run -v
